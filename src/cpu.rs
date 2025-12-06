@@ -205,6 +205,14 @@ impl CPU {
         self.flags &= 0b1111_1101;
     }
 
+    fn set_break_flag(&mut self) {
+        self.flags |= 0b0010_0000;
+    }
+
+    fn clear_break_flag(&mut self) {
+        self.flags &= 0b1101_1111;
+    }
+
     fn set_overflow_flag(&mut self) {
         self.flags |= 0b0100_0000;
     }
@@ -454,7 +462,23 @@ impl CPU {
     }
 
     // BRK Force Interrupt
-    fn brk(&mut self, addressing_mode: &AddressingMode) {}
+    fn brk(&mut self, addressing_mode: &AddressingMode) {
+        // save program counter and
+        let old_program_counter = self.program_counter;
+        let lsb = (old_program_counter & 0xFF) as u8;
+        let hsb = (old_program_counter >> 8) as u8;
+
+        self.memory[self.insert_address_into_stack() as usize] = lsb;
+        self.memory[self.insert_address_into_stack() as usize] = hsb;
+
+        // update CPU status flags into the stack
+        self.memory[self.insert_address_into_stack() as usize] = self.flags;
+
+        // set IRQ interupt vector
+        self.program_counter = self.mem_read_u16(RESET_INTERRUPT_ADDR);
+        // set break flag to 1
+        self.set_break_flag();
+    }
 
     // ldx https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
     // Load X Register
