@@ -229,6 +229,14 @@ impl CPU {
         self.flags &= 0b1111_1110;
     }
 
+    fn clear_decimal_flag(&mut self) {
+        self.flags &= 0b1111_0111;
+    }
+
+    fn clear_interrupt_disable(&mut self) {
+        self.flags &= 0b1101_0000;
+    }
+
     // Stack operator
     fn get_address_from_stack(&self) -> u16 {
         let absolute_stack_pointer = format!("01{:X}", self.stack_pointer);
@@ -480,6 +488,128 @@ impl CPU {
         self.set_break_flag();
     }
 
+    //bvc - Branch if Overflow Clear
+    fn bvc(&mut self, addressing_mode: &AddressingMode) {}
+
+    //CLC - Clear Carry Flag
+    fn clc(&mut self, addressing_mode: &AddressingMode) {
+        self.clear_carry_flag();
+    }
+
+    // CLD - Clear Decimal Mode
+    fn cld(&mut self, addressing_mode: &AddressingMode) {
+        self.clear_decimal_flag();
+    }
+
+    //CLI - Clear Interrupt Disable
+    fn cli(&mut self, addressing_mode: &AddressingMode) {
+        self.clear_interrupt_disable();
+    }
+
+    //CLV - Clear Overflow Flag
+    fn clv(&mut self, addressing_mode: &AddressingMode) {
+        self.clear_overflow_flag();
+    }
+
+    //CMP - Compare
+    fn cmp(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let param = self.mem_read(operand_addr);
+
+        if self.accumulator >= param {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.accumulator.wrapping_sub(param))
+    }
+
+    //CPX - Compare X Register
+    fn cpx(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let param = self.mem_read(operand_addr);
+
+        if self.register_x >= param {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.register_x.wrapping_sub(param));
+    }
+
+    //CPY - Compare Y Register
+    fn cpy(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let param = self.mem_read(operand_addr);
+
+        if self.register_y >= param {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(self.register_y.wrapping_sub(param));
+    }
+
+    // DEC - Decrement Memory
+    // Subtracts one from the value held at a specified memory location setting the zero and negative flags as appropriate.
+    fn dec(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let param = self.mem_read(operand_addr);
+
+        self.mem_write(operand_addr, param.wrapping_sub(1));
+        self.update_negative_and_zero_flags(param.wrapping_sub(1));
+    }
+
+    // DEX - Decrement X Register
+    fn dex(&mut self, addressing_mode: &AddressingMode) {
+        self.register_x = self.register_x.wrapping_sub(1);
+        self.update_negative_and_zero_flags(self.register_x);
+    }
+
+    fn dey(&mut self, addressing_mode: &AddressingMode) {
+        self.register_y = self.register_y.wrapping_sub(1);
+        self.update_negative_and_zero_flags(self.register_y);
+    }
+
+    // EOR Exclusive OR
+    // An exclusive OR is performed, bit by bit, on the accumulator contents using the contents of a byte of memory.
+    fn eor(&mut self, addressing_mode: &AddressingMode) {}
+
+    //INC - Increment Memory
+    fn inc(&mut self, addressing_mode: &AddressingMode) {}
+
+    // INX - Increment X Register
+    fn inx(&mut self, addressing_mode: &AddressingMode) {
+        self.register_x = self.register_x.wrapping_add(1);
+        self.update_negative_and_zero_flags(self.register_x);
+    }
+
+    fn iny(&mut self, addressing_mode: &AddressingMode) {
+        self.register_y = self.register_y.wrapping_add(1);
+        self.update_negative_and_zero_flags(self.register_y);
+    }
+
+    // Jump
+    fn jup(&mut self, addressing_mode: &AddressingMode) {}
+
+    // JSR - Jump to Subroutine
+    //The JSR instruction pushes the address (minus one) of the return point on to the stack and then sets the program counter to the target memory address.
+    fn jsr(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+
+        let old_program_counter = self.program_counter + 1;
+        let lsb = (old_program_counter & 0xFF) as u8;
+        let hsb = (old_program_counter >> 8) as u8;
+        self.memory[self.insert_address_into_stack() as usize] = hsb;
+        self.memory[self.insert_address_into_stack() as usize] = lsb;
+
+        // update program counter (to jump to a subroutine)
+        self.program_counter = operand_addr;
+    }
+
     // ldx https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
     // Load X Register
     fn ldx(&mut self, addressing_mode: &AddressingMode) {
@@ -496,6 +626,12 @@ impl CPU {
 
         self.register_y = param;
         self.update_negative_and_zero_flags(self.register_y);
+    }
+
+    // LSR - Logical Shift Right
+    fn lsr(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let param = self.mem_read(operand_addr);
     }
 
     fn sta(&mut self, addressing_mode: &AddressingMode) {
