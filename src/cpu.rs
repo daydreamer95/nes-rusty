@@ -85,14 +85,93 @@ impl CPU {
 
             println!("Current ops code: {:#?}", current_opcode);
             match code {
+                0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
+                    self.adc(&current_opcode.addressing_mode);
+                }
+                0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+                    self.and(&current_opcode.addressing_mode);
+                }
+                0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
+                    self.asl(&current_opcode.addressing_mode);
+                }
+                0x90 => self.bcc(&current_opcode.addressing_mode),
+                0xB0 => self.bcs(&current_opcode.addressing_mode),
+                0xF0 => self.beq(&current_opcode.addressing_mode),
+                0xD0 => self.bne(&current_opcode.addressing_mode),
+                0x10 => self.bpl(&current_opcode.addressing_mode),
+                0x18 => self.clc(),
+                0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
+                    self.cmp(&current_opcode.addressing_mode);
+                }
+                0xE0 | 0xE4 | 0xEC => {
+                    self.cpx(&current_opcode.addressing_mode);
+                }
+                0xCE | 0xDE | 0xC6 | 0xD6 => {
+                    self.dec(&current_opcode.addressing_mode);
+                }
+                0xCA => self.dex(),
+                0x88 => self.dey(),
+                0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
+                    self.eor(&current_opcode.addressing_mode);
+                }
+                0xE6 | 0xF6 | 0xEE | 0xFE => {
+                    self.inc(&current_opcode.addressing_mode);
+                }
+                0xE8 => self.inx(),
+                0xC8 => self.inx(),
+                0x4C | 0x6C => self.inx(),
+                0x20 => self.jsr(&current_opcode.addressing_mode),
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&current_opcode.addressing_mode);
+                }
+                0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                    self.ldx(&current_opcode.addressing_mode);
+                }
+                0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                    self.ldy(&current_opcode.addressing_mode);
+                }
+                0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                    self.lsr(&current_opcode.addressing_mode);
+                }
+                0xEA => self.nop(&current_opcode.addressing_mode),
+                0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
+                    self.ora(&current_opcode.addressing_mode);
+                }
+                0x48 => self.pha(&current_opcode.addressing_mode),
+                0x08 => self.php(&current_opcode.addressing_mode),
+                0x68 => self.pla(&current_opcode.addressing_mode),
+                0x28 => self.plp(&current_opcode.addressing_mode),
+                0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&current_opcode.addressing_mode),
+                0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&current_opcode.addressing_mode),
+                0x40 => self.rti(&current_opcode.addressing_mode),
+                0x60 => self.rts(&current_opcode.addressing_mode),
+                0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
+                    self.sbc(&current_opcode.addressing_mode)
+                }
+                0x38 => self.sec(),
+                0xF8 => self.sed(),
+                0x78 => self.sei(),
+                0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
+                    self.sbc(&current_opcode.addressing_mode);
                 }
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(&current_opcode.addressing_mode);
                 }
-                0x90 => {
-                    self.bcc(&current_opcode.addressing_mode);
+                0x86 | 0x96 | 0x8E => {
+                    self.stx(&current_opcode.addressing_mode);
+                }
+                0x84 | 0x94 | 0x8C => {
+                    self.sty(&current_opcode.addressing_mode);
+                }
+                0xAA => self.tax(),
+                0x8A => self.txa(),
+                0xBA => self.tsx(),
+                0x9A => self.txs(),
+                0x98 => self.tya(),
+                0x00 => {
+                    self.brk();
+                    println!("Reached break: {:x}", self.program_counter);
+                    return;
                 }
                 _ => return,
             }
@@ -470,7 +549,7 @@ impl CPU {
     }
 
     // BRK Force Interrupt
-    fn brk(&mut self, addressing_mode: &AddressingMode) {
+    fn brk(&mut self) {
         // save program counter and
         let old_program_counter = self.program_counter;
         let lsb = (old_program_counter & 0xFF) as u8;
@@ -492,7 +571,7 @@ impl CPU {
     fn bvc(&mut self, addressing_mode: &AddressingMode) {}
 
     //CLC - Clear Carry Flag
-    fn clc(&mut self, addressing_mode: &AddressingMode) {
+    fn clc(&mut self) {
         self.clear_carry_flag();
     }
 
@@ -564,12 +643,12 @@ impl CPU {
     }
 
     // DEX - Decrement X Register
-    fn dex(&mut self, addressing_mode: &AddressingMode) {
+    fn dex(&mut self) {
         self.register_x = self.register_x.wrapping_sub(1);
         self.update_negative_and_zero_flags(self.register_x);
     }
 
-    fn dey(&mut self, addressing_mode: &AddressingMode) {
+    fn dey(&mut self) {
         self.register_y = self.register_y.wrapping_sub(1);
         self.update_negative_and_zero_flags(self.register_y);
     }
@@ -582,7 +661,7 @@ impl CPU {
     fn inc(&mut self, addressing_mode: &AddressingMode) {}
 
     // INX - Increment X Register
-    fn inx(&mut self, addressing_mode: &AddressingMode) {
+    fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
         self.update_negative_and_zero_flags(self.register_x);
     }
@@ -610,8 +689,6 @@ impl CPU {
         self.program_counter = operand_addr;
     }
 
-    fn nop(&mut self, addressing_mode: &AddressingMode) {}
-
     //NOP - No Operation
     // The NOP instruction causes no changes to the processor other than the normal incrementing of the program counter to the next instruction.
     fn nop(&mut self, addressing_mode: &AddressingMode) {}
@@ -632,6 +709,7 @@ impl CPU {
     fn rol(&mut self, addressing_mode: &AddressingMode) {}
     fn ror(&mut self, addressing_mode: &AddressingMode) {}
     fn rti(&mut self, addressing_mode: &AddressingMode) {}
+    fn rts(&mut self, addressing_mode: &AddressingMode) {}
 
     // ldx https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
     // Load X Register
@@ -672,16 +750,22 @@ impl CPU {
 
         self.accumulator = self.accumulator.wrapping_sub(param);
         self.update_negative_and_zero_flags(self.accumulator);
-        self.update_carry_and_overflow_flags(
+        self.update_carry_and_overflow_flag(
             old_accumulator.checked_sub(param),
             MathematicalOperation::Sub,
         );
     }
 
-    fn sec(&mut self, addressing_mode: &AddressingMode) {}
-    fn set(&mut self, addressing_mode: &AddressingMode) {}
-    fn sed(&mut self, addressing_mode: &AddressingMode) {}
-    fn sei(&mut self, addressing_mode: &AddressingMode) {}
+    //SEC - Set Carry Flag
+    // Set the carry flag to one.
+    fn sec(&mut self) {
+        self.set_carry_flag();
+    }
+    //fn set(&mut self, addressing_mode: &AddressingMode) {}
+    // SED - Set Decimal Flag
+    //
+    fn sed(&mut self) {}
+    fn sei(&mut self) {}
 
     fn stx(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
@@ -703,7 +787,7 @@ impl CPU {
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    fn tsx(&mut self, addressing_mode: &AddressingMode) {}
-    fn txs(&mut self, addressing_mode: &AddressingMode) {}
-    fn tya(&mut self, addressing_mode: &AddressingMode) {}
+    fn tsx(&mut self) {}
+    fn txs(&mut self) {}
+    fn tya(&mut self) {}
 }
