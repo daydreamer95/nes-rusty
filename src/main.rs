@@ -59,5 +59,5 @@ fn main() {
     cpu.reset();
     //println!("I'm preparing cpu {cpu:?}!");
     cpu.run();
-    println!("After I run the program {cpu:x?}!");
+    //println!("After I run the program {cpu:x?}!");
 }

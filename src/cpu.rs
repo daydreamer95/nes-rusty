@@ -18,6 +18,7 @@ pub enum AddressingMode {
     Absolute,
     AbsoluteX, // Absolute, X
     AbsoluteY, // Absolute, Y
+    Indirect,
     IndirectX, // (Indirect, X)
     IndirectY, // (Indirect), Y
     NoneAddressing,
@@ -96,10 +97,19 @@ impl CPU {
                 }
                 0x90 => self.bcc(&current_opcode.addressing_mode),
                 0xB0 => self.bcs(&current_opcode.addressing_mode),
+                0x50 => self.bvc(&current_opcode.addressing_mode),
+                0x70 => self.bvs(&current_opcode.addressing_mode),
                 0xF0 => self.beq(&current_opcode.addressing_mode),
                 0xD0 => self.bne(&current_opcode.addressing_mode),
                 0x10 => self.bpl(&current_opcode.addressing_mode),
+                0x24 | 0x2C => {
+                    self.bit(&current_opcode.addressing_mode);
+                }
+                0x30 => self.bmi(&current_opcode.addressing_mode),
                 0x18 => self.clc(),
+                0xD8 => self.cld(),
+                0x58 => self.cli(),
+                0xB8 => self.clv(),
                 0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
                     self.cmp(&current_opcode.addressing_mode);
                 }
@@ -108,6 +118,9 @@ impl CPU {
                 }
                 0xCE | 0xDE | 0xC6 | 0xD6 => {
                     self.dec(&current_opcode.addressing_mode);
+                }
+                0xC0 | 0xC4 | 0xCC => {
+                    self.cpy(&current_opcode.addressing_mode);
                 }
                 0xCA => self.dex(),
                 0x88 => self.dey(),
@@ -118,8 +131,8 @@ impl CPU {
                     self.inc(&current_opcode.addressing_mode);
                 }
                 0xE8 => self.inx(),
-                0xC8 => self.inx(),
-                0x4C | 0x6C => self.inx(),
+                0xC8 => self.iny(),
+                0x4C | 0x6C => self.jmp(&current_opcode.addressing_mode),
                 0x20 => self.jsr(&current_opcode.addressing_mode),
                 0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
                     self.lda(&current_opcode.addressing_mode);
@@ -137,23 +150,20 @@ impl CPU {
                 0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
                     self.ora(&current_opcode.addressing_mode);
                 }
-                0x48 => self.pha(&current_opcode.addressing_mode),
-                0x08 => self.php(&current_opcode.addressing_mode),
-                0x68 => self.pla(&current_opcode.addressing_mode),
-                0x28 => self.plp(&current_opcode.addressing_mode),
+                0x48 => self.pha(),
+                0x08 => self.php(),
+                0x68 => self.pla(),
+                0x28 => self.plp(),
                 0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&current_opcode.addressing_mode),
                 0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&current_opcode.addressing_mode),
-                0x40 => self.rti(&current_opcode.addressing_mode),
-                0x60 => self.rts(&current_opcode.addressing_mode),
+                0x40 => self.rti(),
+                0x60 => self.rts(),
                 0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
                     self.sbc(&current_opcode.addressing_mode)
                 }
                 0x38 => self.sec(),
                 0xF8 => self.sed(),
                 0x78 => self.sei(),
-                0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
-                    self.sbc(&current_opcode.addressing_mode);
-                }
                 0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
                     self.sta(&current_opcode.addressing_mode);
                 }
@@ -164,19 +174,26 @@ impl CPU {
                     self.sty(&current_opcode.addressing_mode);
                 }
                 0xAA => self.tax(),
+                0xA8 => self.tay(),
                 0x8A => self.txa(),
                 0xBA => self.tsx(),
                 0x9A => self.txs(),
                 0x98 => self.tya(),
                 0x00 => {
                     self.brk();
-                    println!("Reached break: {:x}", self.program_counter);
+                    println!(
+                        "Reached break with program counter: {:x}",
+                        self.program_counter
+                    );
                     return;
                 }
                 _ => return,
             }
 
             if current_program_counter_state == self.program_counter {
+                //the addressing mode is a property of an instruction that defines how the CPU should interpret the next 1 or 2 bytes in the instruction stream.
+                //Different addressing modes have different instruction sizes
+                //There are no opcodes that occupy more than 3 bytes. CPU instruction size can be either 1, 2, or 3 bytes.
                 self.program_counter += (current_opcode.bytes - 1) as u16;
             }
         }
@@ -229,7 +246,6 @@ impl CPU {
     pub fn get_indirect_lookup(&self, lookup_addr: u16) -> u16 {
         let lsb = self.mem_read(lookup_addr);
         let hsb = self.mem_read(lookup_addr.wrapping_add(1));
-
         (hsb as u16) << 8 | (lsb as u16)
     }
 
@@ -570,23 +586,25 @@ impl CPU {
     //bvc - Branch if Overflow Clear
     fn bvc(&mut self, addressing_mode: &AddressingMode) {}
 
+    //bvs - Branch if Overflow Set
+    fn bvs(&mut self, addressing_mode: &AddressingMode) {}
     //CLC - Clear Carry Flag
     fn clc(&mut self) {
         self.clear_carry_flag();
     }
 
     // CLD - Clear Decimal Mode
-    fn cld(&mut self, addressing_mode: &AddressingMode) {
+    fn cld(&mut self) {
         self.clear_decimal_flag();
     }
 
     //CLI - Clear Interrupt Disable
-    fn cli(&mut self, addressing_mode: &AddressingMode) {
+    fn cli(&mut self) {
         self.clear_interrupt_disable();
     }
 
     //CLV - Clear Overflow Flag
-    fn clv(&mut self, addressing_mode: &AddressingMode) {
+    fn clv(&mut self) {
         self.clear_overflow_flag();
     }
 
@@ -666,13 +684,13 @@ impl CPU {
         self.update_negative_and_zero_flags(self.register_x);
     }
 
-    fn iny(&mut self, addressing_mode: &AddressingMode) {
+    fn iny(&mut self) {
         self.register_y = self.register_y.wrapping_add(1);
         self.update_negative_and_zero_flags(self.register_y);
     }
 
     // Jump
-    fn jup(&mut self, addressing_mode: &AddressingMode) {}
+    fn jmp(&mut self, addressing_mode: &AddressingMode) {}
 
     // JSR - Jump to Subroutine
     //The JSR instruction pushes the address (minus one) of the return point on to the stack and then sets the program counter to the target memory address.
@@ -699,17 +717,17 @@ impl CPU {
 
     // PHA - Push Accumulator
     // Pushes a copy of the accumulator on to the stack.
-    fn pha(&mut self, addressing_mode: &AddressingMode) {}
+    fn pha(&mut self) {}
     //PHP - Push Processor Status
     //Pushes a copy of the status flags on to the stack.
-    fn php(&mut self, addressing_mode: &AddressingMode) {}
+    fn php(&mut self) {}
 
-    fn pla(&mut self, addressing_mode: &AddressingMode) {}
-    fn plp(&mut self, addressing_mode: &AddressingMode) {}
+    fn pla(&mut self) {}
+    fn plp(&mut self) {}
     fn rol(&mut self, addressing_mode: &AddressingMode) {}
     fn ror(&mut self, addressing_mode: &AddressingMode) {}
-    fn rti(&mut self, addressing_mode: &AddressingMode) {}
-    fn rts(&mut self, addressing_mode: &AddressingMode) {}
+    fn rti(&mut self) {}
+    fn rts(&mut self) {}
 
     // ldx https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
     // Load X Register
@@ -788,6 +806,7 @@ impl CPU {
     }
 
     fn tsx(&mut self) {}
+    fn tay(&mut self) {}
     fn txs(&mut self) {}
     fn tya(&mut self) {}
 }
