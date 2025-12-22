@@ -584,10 +584,28 @@ impl CPU {
     }
 
     //bvc - Branch if Overflow Clear
-    fn bvc(&mut self, addressing_mode: &AddressingMode) {}
+    fn bvc(&mut self, addressing_mode: &AddressingMode) {
+        // if overflow clear
+        if self.flags & 0x0000_0000 == 0 {
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            let param = self.mem_read(operand_addr);
+
+            let jump_addr = self.program_counter.wrapping_add(param as u16);
+            self.program_counter = jump_addr
+        }
+    }
 
     //bvs - Branch if Overflow Set
-    fn bvs(&mut self, addressing_mode: &AddressingMode) {}
+    fn bvs(&mut self, addressing_mode: &AddressingMode) {
+        // if overflow is set
+        if self.flags & 0b0100_0000 == 0b0100_0000 {
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            let param = self.mem_read(operand_addr);
+
+            let jump_addr = self.program_counter.wrapping_add(param as u16);
+            self.program_counter = jump_addr
+        }
+    }
     //CLC - Clear Carry Flag
     fn clc(&mut self) {
         self.clear_carry_flag();
@@ -673,10 +691,21 @@ impl CPU {
 
     // EOR Exclusive OR
     // An exclusive OR is performed, bit by bit, on the accumulator contents using the contents of a byte of memory.
-    fn eor(&mut self, addressing_mode: &AddressingMode) {}
+    fn eor(&mut self, addressing_mode: &AddressingMode) {
+        let addr = self.get_operand_addr(addressing_mode);
+        let data = self.mem_read(addr);
+
+        self.accumulator = self.accumulator ^ data
+    }
 
     //INC - Increment Memory
-    fn inc(&mut self, addressing_mode: &AddressingMode) {}
+    fn inc(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let mut data = self.mem_read(operand_addr);
+        data = data.wrapping_add(1);
+        self.mem_write(operand_addr, data);
+        self.update_negative_and_zero_flags(data);
+    }
 
     // INX - Increment X Register
     fn inx(&mut self) {
@@ -709,23 +738,75 @@ impl CPU {
 
     //NOP - No Operation
     // The NOP instruction causes no changes to the processor other than the normal incrementing of the program counter to the next instruction.
-    fn nop(&mut self, addressing_mode: &AddressingMode) {}
+    fn nop(&mut self, addressing_mode: &AddressingMode) {
+        //do nothing
+    }
 
     // ORA - Logical Inclusive OR
     // An inclusive OR is performed, bit by bit, on the accumulator contents using the contents of a byte of memory.
-    fn ora(&mut self, addressing_mode: &AddressingMode) {}
+    fn ora(&mut self, addressing_mode: &AddressingMode) {
+        let operand_addr = self.get_operand_addr(addressing_mode);
+        let mut data = self.mem_read(operand_addr);
+        data = self.accumulator | data;
+        self.accumulator = data;
+        self.update_negative_and_zero_flags(data);
+    }
 
     // PHA - Push Accumulator
     // Pushes a copy of the accumulator on to the stack.
-    fn pha(&mut self) {}
+    fn pha(&mut self) {
+        let current_accumulator = self.accumulator;
+        self.mem_write(self.get_address_from_stack(), current_accumulator);
+        self.insert_address_into_stack();
+    }
     //PHP - Push Processor Status
     //Pushes a copy of the status flags on to the stack.
-    fn php(&mut self) {}
+    fn php(&mut self) {
+        let current_flag = self.flags;
+        self.mem_write(self.get_address_from_stack(), current_flag);
+        self.insert_address_into_stack();
+    }
 
-    fn pla(&mut self) {}
-    fn plp(&mut self) {}
-    fn rol(&mut self, addressing_mode: &AddressingMode) {}
+    fn pla(&mut self) {
+        let data_from_stack = self.pop_address_from_stack();
+        let data_converted_8bit = (data_from_stack) as u8;
+        self.accumulator = data_converted_8bit;
+        self.update_negative_and_zero_flags(data_converted_8bit);
+    }
+    fn plp(&mut self) {
+        let data_from_stack = self.pop_address_from_stack();
+        let data_converted_8bit = (data_from_stack) as u8;
+        self.flags = data_converted_8bit;
+        self.update_negative_and_zero_flags(data_converted_8bit);
+    }
+
+    fn rol(&mut self, addressing_mode: &AddressingMode) {
+        let carry = format!("{:08b}", self.flags).chars().collect::<Vec<char>>()[7];
+
+        let old_param: u8;
+        let result: u8;
+        if *addressing_mode == AddressingMode::Accumulator {
+            old_param = self.accumulator;
+            self.accumulator = (self.accumulator << 1) | carry as u8;
+            result = self.accumulator;
+        } else {
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            old_param = self.mem_read(operand_addr);
+            self.mem_write(operand_addr, (old_param << 1) | carry as u8);
+            result = old_param << 1;
+        }
+
+        //Bit 0 is filled with the current value of the carry flag whilst the old bit 7 becomes the new carry flag value.
+        if old_param >> 7 == 1 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(result);
+    }
     fn ror(&mut self, addressing_mode: &AddressingMode) {}
+
     fn rti(&mut self) {}
     fn rts(&mut self) {}
 
