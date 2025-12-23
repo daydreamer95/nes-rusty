@@ -85,8 +85,8 @@ impl CPU {
                 .unwrap_or_else(|| panic!("OP code {:X} not found", code));
 
             println!(
-                "Current ops code: {:X?} and program counter {:X?}",
-                current_opcode, current_program_counter_state
+                "Current ops code: {:X?} and program counter {:X?} and CPU flags {:08b}",
+                current_opcode, current_program_counter_state, self.flags
             );
             match code {
                 0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
@@ -573,7 +573,7 @@ impl CPU {
     // BPL Branch if Positive
     fn bpl(&mut self, addressing_mode: &AddressingMode) {
         // If negative flag is clear
-        if self.flags & 0b0000_0000 == 0 {
+        if self.flags & 0b1000_0000 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
