@@ -324,8 +324,16 @@ impl CPU {
         self.flags &= 0b1111_1110;
     }
 
+    fn set_decimal_flag(&mut self) {
+        self.flags |= 0b0000_1000;
+    }
+
     fn clear_decimal_flag(&mut self) {
         self.flags &= 0b1111_0111;
+    }
+
+    fn set_interrupt_disable(&mut self) {
+        self.flags |= 0b0010_0000;
     }
 
     fn clear_interrupt_disable(&mut self) {
@@ -350,6 +358,11 @@ impl CPU {
     fn pop_address_from_stack(&mut self) -> u16 {
         self.stack_pointer += 1;
         self.get_address_from_stack()
+    }
+
+    fn pop_address_from_stack_u8(&mut self) -> u8 {
+        self.stack_pointer += 1;
+        self.mem_read((STACK_STARTING_POINTER as u16) + self.stack_pointer as u16)
     }
 
     fn get_operand_addr(&self, mode: &AddressingMode) -> u16 {
@@ -805,10 +818,43 @@ impl CPU {
 
         self.update_negative_and_zero_flags(result);
     }
-    fn ror(&mut self, addressing_mode: &AddressingMode) {}
 
-    fn rti(&mut self) {}
-    fn rts(&mut self) {}
+    fn ror(&mut self, addressing_mode: &AddressingMode) {
+        let carry = format!("{:08b}", self.flags).chars().collect::<Vec<char>>()[7];
+
+        let old_param: u8;
+        let result: u8;
+        //Bit 7 is filled with the current value of the carry flag
+        if *addressing_mode == AddressingMode::Accumulator {
+            old_param = self.accumulator;
+            self.accumulator = (self.accumulator >> 1) | ((carry as u8) << 7);
+            result = self.accumulator;
+        } else {
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            old_param = self.mem_read(operand_addr);
+            self.mem_write(operand_addr, (old_param >> 1) | ((carry as u8) << 7));
+            result = old_param << 1;
+        }
+
+        //Bit 0 is filled with the current value of the carry flag whilst the old bit 7 becomes the new carry flag value.
+        if old_param & 1 == 1 {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        self.update_negative_and_zero_flags(result);
+    }
+
+    fn rti(&mut self) {
+        let stack_addr = self.pop_address_from_stack_u8();
+        self.flags = stack_addr;
+        self.program_counter = self.pop_address_from_stack();
+    }
+
+    fn rts(&mut self) {
+        self.program_counter = self.pop_address_from_stack();
+    }
 
     // ldx https://www.nesdev.org/obelisk-6502-guide/reference.html#LDX
     // Load X Register
@@ -863,8 +909,12 @@ impl CPU {
     //fn set(&mut self, addressing_mode: &AddressingMode) {}
     // SED - Set Decimal Flag
     //
-    fn sed(&mut self) {}
-    fn sei(&mut self) {}
+    fn sed(&mut self) {
+        self.set_decimal_flag();
+    }
+    fn sei(&mut self) {
+        self.set_interrupt_disable();
+    }
 
     fn stx(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
@@ -886,8 +936,19 @@ impl CPU {
         self.update_negative_and_zero_flags(self.accumulator);
     }
 
-    fn tsx(&mut self) {}
-    fn tay(&mut self) {}
-    fn txs(&mut self) {}
-    fn tya(&mut self) {}
+    fn tsx(&mut self) {
+        self.register_x = self.stack_pointer;
+        self.update_negative_and_zero_flags(self.register_x);
+    }
+    fn tay(&mut self) {
+        self.register_y = self.accumulator;
+        self.update_negative_and_zero_flags(self.register_x);
+    }
+    fn txs(&mut self) {
+        self.stack_pointer = self.register_x;
+    }
+    fn tya(&mut self) {
+        self.accumulator = self.register_y;
+        self.update_negative_and_zero_flags(self.accumulator);
+    }
 }
