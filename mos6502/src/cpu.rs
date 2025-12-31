@@ -5,7 +5,7 @@ use std::collections::HashMap;
 const MEMORY_SIZE: u16 = 0xFFFF;
 const PROGRAM_ROM_MEMORY_ADDRESS_START: u16 = 0x0600;
 const RESET_INTERRUPT_ADDR: u16 = 0xFFFC;
-const STACK_STARTING_POINTER: u8 = 0xFF;
+const STACK_STARTING_POINTER: u8 = 0xFD;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddressingMode {
@@ -79,8 +79,6 @@ impl CPU {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
-            callback(self);
-
             let code = self.mem_read(self.program_counter);
             self.program_counter += 1;
             let current_program_counter_state = self.program_counter;
@@ -210,6 +208,8 @@ impl CPU {
                 //There are no opcodes that occupy more than 3 bytes. CPU instruction size can be either 1, 2, or 3 bytes.
                 self.program_counter += (current_opcode.bytes - 1) as u16;
             }
+
+            callback(self);
         }
     }
 
@@ -352,7 +352,7 @@ impl CPU {
         self.accumulator = 0;
         self.register_x = 0;
         self.register_y = 0;
-        self.flags = 0b0000_0000;
+        self.flags = 0b100100;
         self.program_counter = self.mem_read_u16(RESET_INTERRUPT_ADDR);
     }
 
@@ -621,29 +621,40 @@ impl CPU {
     // asl https://www.nesdev.org/obelisk-6502-guide/reference.html#ASL
     // ASL Arithmetic Shift Left
     fn asl(&mut self, addressing_mode: &AddressingMode) {
-        let seventhBit = format!("{:08b}", self.accumulator)
-            .chars()
-            .collect::<Vec<char>>()[0];
+        // let seventhBit = format!("{:08b}", self.accumulator)
+        //     .chars()
+        //     .collect::<Vec<char>>()[0];
 
         // If accumulator mode, we changing the value.
         // If not, we modifying shift left content of address read from that mode
         let mut result: u8;
         if *addressing_mode == AddressingMode::Accumulator {
+            if self.accumulator >> 7 == 1 {
+                self.set_carry_flag();
+            } else {
+                self.clear_carry_flag();
+            }
             self.accumulator = self.accumulator << 1;
-            result = self.accumulator
+            result = self.accumulator;
         } else {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
+            if param >> 7 == 1 {
+                self.set_carry_flag();
+            } else {
+                self.clear_carry_flag();
+            }
             result = param << 1;
-            self.accumulator = result;
-            //self.mem_write(operand_addr, result)
+
+            //self.accumulator = result;
+            self.mem_write(operand_addr, result);
         }
 
         self.update_negative_and_zero_flags(result);
         // Update carry flags with old sventh bit
-        let bit = format!("00000000{}", seventhBit);
-        let new_bits = u8::from_str_radix(&bit, 2).unwrap();
-        self.flags |= new_bits;
+        // let bit = format!("00000000{}", seventhBit);
+        // let new_bits = u8::from_str_radix(&bit, 2).unwrap();
+        // self.flags |= new_bits;
     }
 
     // bcc - Branch if Carry Clear
@@ -655,7 +666,7 @@ impl CPU {
         let step = param + 1;
 
         // if carry flag is not set
-        if self.flags & 0x0000_00001 == 0 {
+        if self.flags & 0b0000_0001 == 0 {
             self.add_relative_displacement_to_program_counter(step);
         }
     }
@@ -666,9 +677,13 @@ impl CPU {
         let param = self.mem_read(operand_addr);
 
         let step = param + 1;
-
-        // if carry flag is not set
-        if self.flags & 0x0000_00001 == 1 {
+        println!(
+            "HUYDEBUG. flags {:#?} and self.flags & 0000_0001 = {:#?}",
+            self.flags,
+            self.flags & 0b000_0001
+        );
+        // if carry flag is set
+        if self.flags & 0b0000_0001 == 1 {
             self.add_relative_displacement_to_program_counter(step);
         }
     }
@@ -679,7 +694,7 @@ impl CPU {
 
         let step = param + 1;
 
-        if self.flags & 0x0000_0010 == 2 {
+        if self.flags & 0b0000_0010 == 2 {
             // Zero flags is set
             self.add_relative_displacement_to_program_counter(step);
         }
@@ -688,6 +703,22 @@ impl CPU {
     fn bit(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
         let param = self.mem_read(operand_addr);
+
+        let result = self.accumulator & param;
+
+        if result == 0 {
+            self.set_zero_flag();
+        } else {
+            self.clear_zero_flag();
+        }
+
+        if result & 0b1000_0000 > 0 {
+            self.flags |= 0b1000_0000;
+        }
+
+        if result & 0b0100_0000 > 0 {
+            self.flags |= 0b0100_0000;
+        }
     }
     // BMI Branch if Minus
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
@@ -745,7 +776,7 @@ impl CPU {
     //bvc - Branch if Overflow Clear
     fn bvc(&mut self, addressing_mode: &AddressingMode) {
         // if overflow clear
-        if self.flags & 0x0000_0000 == 0 {
+        if self.flags & 0b0000_0000 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
@@ -879,7 +910,7 @@ impl CPU {
 
     // Jump
     fn jmp(&mut self, addressing_mode: &AddressingMode) {
-        let addr = self.get_operand_addr(addressing_mode);
+        let addr = self.mem_read_u16(self.program_counter);
         if *addressing_mode == AddressingMode::Absolute {
             self.program_counter = addr;
         } else {
@@ -892,8 +923,7 @@ impl CPU {
             };
             self.program_counter = indirect_ref;
         }
-
-        println!("Jump to new PC: {:016b}", self.program_counter);
+        //println!("Jump to new PC: {:016b}", self.program_counter);
     }
 
     // JSR - Jump to Subroutine
@@ -1042,28 +1072,44 @@ impl CPU {
 
     // LSR - Logical Shift Right
     fn lsr(&mut self, addressing_mode: &AddressingMode) {
-        let firstBit = format!("{:08b}", self.accumulator)
-            .chars()
-            .collect::<Vec<char>>()[7];
+        // let first_bit = format!("{:08b}", self.accumulator)
+        //     .chars()
+        //     .collect::<Vec<char>>()[7];
+        //
+        // println!(
+        //     "first_bit = {:#?} accumulator {:08b}",
+        //     first_bit, self.accumulator
+        // );
         // If accumulator mode, we changing the value.
         // If not, we modifying shift left content of address read from that mode
         let mut result: u8;
         if *addressing_mode == AddressingMode::Accumulator {
+            if self.accumulator & 1 == 1 {
+                self.set_carry_flag();
+            } else {
+                self.clear_carry_flag();
+            }
             self.accumulator = self.accumulator >> 1;
-            result = self.accumulator
+            result = self.accumulator;
         } else {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
+            if param & 1 == 1 {
+                self.set_carry_flag();
+            } else {
+                self.clear_carry_flag();
+            }
+
             result = param >> 1;
-            self.accumulator = result;
-            //self.mem_write(operand_addr, result)
+            //self.accumulator = result;
+            self.mem_write(operand_addr, result);
         }
 
         self.update_negative_and_zero_flags(result);
         // Update carry flags with old zero bit
-        let bit = format!("00000000{}", firstBit);
-        let new_bits = u8::from_str_radix(&bit, 2).unwrap();
-        self.flags |= new_bits;
+        // let bit = format!("{:08}", first_bit.to_digit(10).unwrap());
+        // let new_bits = u8::from_str_radix(&bit, 2).unwrap();
+        // self.flags |= new_bits;
     }
 
     fn sta(&mut self, addressing_mode: &AddressingMode) {
