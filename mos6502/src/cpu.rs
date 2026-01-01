@@ -5,7 +5,7 @@ use std::collections::HashMap;
 const MEMORY_SIZE: u16 = 0xFFFF;
 const PROGRAM_ROM_MEMORY_ADDRESS_START: u16 = 0x0600;
 const RESET_INTERRUPT_ADDR: u16 = 0xFFFC;
-const STACK_STARTING_POINTER: u8 = 0xFD;
+const STACK_STARTING_POINTER: u8 = 0xFF;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddressingMode {
