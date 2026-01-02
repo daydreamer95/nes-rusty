@@ -1,4 +1,5 @@
 pub use mos6502::cpu;
+use mos6502::cpu::Mem;
 pub use mos6502::ops_code;
 use rand::Rng;
 use rand::thread_rng;
