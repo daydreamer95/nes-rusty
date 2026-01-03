@@ -5,9 +5,10 @@ const RAM_MIRRORS_END: u16 = 0x1FFF;
 const PPU_REGISTERS: u16 = 0x2000;
 const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 
-#[derive(Debug , PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bus {
     cpu_vram: [u8; 2048],
+    rom: Rom,
 }
 
 impl Bus {
