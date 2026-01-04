@@ -29,6 +29,10 @@ impl Mem for Bus {
                 let _mirror_down_addr = addr & 0b00100000_00000111;
                 todo!("PPU is not supported yet")
             }
+            0x8000..=0xFFFF => {
+                println!("UnImplement Rom mem access at {}", addr);
+                0
+            }
             _ => {
                 println!("Ignoring mem access at {}", addr);
                 0
@@ -45,6 +49,9 @@ impl Mem for Bus {
             PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
                 let _mirror_down_addr = addr & 0b00100000_00000111;
                 todo!("PPU is not supported yet");
+            }
+            0x8000..=0xFFFF => {
+                panic!("Attempt to write to Cartridge ROM space")
             }
             _ => {
                 println!("Ignoring mem write-access at {}", addr);

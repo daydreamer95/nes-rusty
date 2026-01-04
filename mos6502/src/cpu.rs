@@ -51,7 +51,7 @@ pub struct CPU {
     // 0 - Carry
     pub flags: u8,
     memory: [u8; MEMORY_SIZE as usize], // 16 bit address model. Going from $0000 to $FFFF
-    bus: Bus,
+    pub bus: Bus,
 }
 
 impl Default for CPU {

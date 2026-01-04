@@ -68,7 +68,9 @@ fn main() {
     //let mut cpu = cpu::CPU::new();
     let games_code: &Vec<u8> = &(*SNAKE_GAME_CODE);
 
-    let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
+    // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
+    let mut emulator =
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/snake.nes".to_string());
 
     emulator.cpu_state.load_program(games_code.clone());
     emulator.cpu_state.reset();
