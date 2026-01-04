@@ -1,11 +1,11 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct NesRom {
     pub prg_rom: Vec<u8>, // Program-ROM
     pub chr_rom: Vec<u8>, // Character ROM ( Sprites)
-    pub s_ram: Vec<u8>,   // Save RAM
-    pub mapper: u8,       // mapper type
-    pub mirror: u8,       // mirroring mode type
-    pub battery: u8,      //battery present
+    //pub s_ram: Vec<u8>,   // Save RAM
+    pub mapper: u8, // mapper type
+    pub mirror: Mirroring, // mirroring mode type
+                    //pub battery: u8,      //battery present
 }
 
 #[derive(Debug, PartialEq)]
@@ -15,8 +15,12 @@ pub enum Mirroring {
     FourScreen,
 }
 
-impl Rom {
-    pub fn new(raw: &Vec<u8>) -> Result<Rom, String> {
+const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
+const PRG_ROM_PAGE_SIZE: usize = 16384;
+const CHR_ROM_PAGE_SIZE: usize = 8192;
+
+impl NesRom {
+    pub fn new(raw: &Vec<u8>) -> Result<NesRom, String> {
         if &raw[0..4] != NES_TAG {
             return Err("File is not in iNES file format".to_string());
         }
@@ -44,11 +48,11 @@ impl Rom {
         let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
         let chr_rom_start = prg_rom_start + prg_rom_size;
 
-        Ok(Rom {
+        Ok(NesRom {
             prg_rom: raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec(),
             chr_rom: raw[chr_rom_start..(chr_rom_start + chr_rom_size)].to_vec(),
             mapper: mapper,
-            screen_mirroring: screen_mirroring,
+            mirror: screen_mirroring,
         })
     }
 }

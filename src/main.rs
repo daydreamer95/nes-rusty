@@ -1,6 +1,9 @@
-pub use mos6502::cpu;
+pub mod cartridge;
+pub mod virtual_nes;
+
+use mos6502::cpu;
 use mos6502::cpu::Mem;
-pub use mos6502::ops_code;
+use mos6502::ops_code;
 use rand::Rng;
 use rand::thread_rng;
 use sdl2::EventPump;
@@ -62,17 +65,19 @@ fn main() {
         .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
         .unwrap();
     //...//
-    let mut cpu = cpu::CPU::new();
+    //let mut cpu = cpu::CPU::new();
     let games_code: &Vec<u8> = &(*SNAKE_GAME_CODE);
 
-    cpu.load_program(games_code.clone());
-    cpu.reset();
+    let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
+
+    emulator.cpu_state.load_program(games_code.clone());
+    emulator.cpu_state.reset();
 
     let mut screen_state = [0 as u8; 32 * 3 * 32];
     let mut rng = rand::thread_rng();
 
     //run with game cycle
-    cpu.run_with_callback(move |cpu| {
+    emulator.cpu_state.run_with_callback(move |cpu| {
         handle_user_input(cpu, &mut event_pump);
         cpu.mem_write(0xfe, rng.gen_range(1, 16));
 

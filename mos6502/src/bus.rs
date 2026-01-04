@@ -8,7 +8,6 @@ const PPU_REGISTERS_MIRRORS_END: u16 = 0x3FFF;
 #[derive(Debug, PartialEq, Eq)]
 pub struct Bus {
     cpu_vram: [u8; 2048],
-    rom: Rom,
 }
 
 impl Bus {
