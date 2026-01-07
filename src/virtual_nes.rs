@@ -2,6 +2,7 @@ use crate::cartridge::NesRom;
 use mos6502::cpu;
 use std::fs;
 
+// TODO: this is stupid, might need to refactor
 pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,

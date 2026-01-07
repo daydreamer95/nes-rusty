@@ -20,6 +20,7 @@ const PRG_ROM_PAGE_SIZE: usize = 16384;
 const CHR_ROM_PAGE_SIZE: usize = 8192;
 
 impl NesRom {
+    //https://www.nesdev.org/wiki/INES
     pub fn new(raw: &Vec<u8>) -> Result<NesRom, String> {
         if &raw[0..4] != NES_TAG {
             return Err("File is not in iNES file format".to_string());
@@ -27,11 +28,27 @@ impl NesRom {
 
         let mapper = (raw[7] & 0b1111_0000) | (raw[6] >> 4);
 
+        // Check flags 7 ( This is bytes 7 of ROM)
+        // 76543210
+        // ||||||||
+        // |||||||+- VS Unisystem
+        // ||||||+-- PlayChoice-10 (8 KB of Hint Screen data stored after CHR data)
+        // ||||++--- If equal to 2, flags 8-15 are in NES 2.0 format
+        // ++++----- Upper nybble of mapper number
         let ines_ver = (raw[7] >> 2) & 0b11;
         if ines_ver != 0 {
             return Err("NES2.0 format is not supported".to_string());
         }
 
+        // Flags 6 ( This is bytes 6 of ROM )
+        // 76543210
+        // ||||||||
+        // |||||||+- Nametable arrangement: 0: vertical arrangement ("horizontal mirrored") (CIRAM A10 = PPU A11)
+        // |||||||                          1: horizontal arrangement ("vertically mirrored") (CIRAM A10 = PPU A10)
+        // ||||||+-- 1: Cartridge contains battery-backed PRG RAM ($6000-7FFF) or other persistent memory
+        // |||||+--- 1: 512-byte trainer at $7000-$71FF (stored before PRG data)
+        // ||||+---- 1: Alternative nametable layout
+        // ++++----- Lower nybble of mapper number
         let four_screen = raw[6] & 0b1000 != 0;
         let vertical_mirroring = raw[6] & 0b1 != 0;
         let screen_mirroring = match (four_screen, vertical_mirroring) {
