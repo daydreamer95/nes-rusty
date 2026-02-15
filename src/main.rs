@@ -1,4 +1,5 @@
 pub mod cartridge;
+pub mod ppu;
 pub mod virtual_nes;
 
 use mos6502::cpu;

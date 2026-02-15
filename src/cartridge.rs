@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct NesRom {
     pub prg_rom: Vec<u8>, // Program-ROM
     pub chr_rom: Vec<u8>, // Character ROM ( Sprites)
@@ -8,7 +8,7 @@ pub struct NesRom {
                     //pub battery: u8,      //battery present
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Mirroring {
     Vertical,
     Horizontal,

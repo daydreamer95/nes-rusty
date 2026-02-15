@@ -1,4 +1,5 @@
 use crate::cartridge::NesRom;
+use crate::ppu;
 use mos6502::cpu;
 use std::fs;
 
@@ -6,6 +7,7 @@ use std::fs;
 pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,
+    pub ppu_state: ppu::PPU,
 }
 
 impl Emulator {
@@ -17,6 +19,7 @@ impl Emulator {
         };
         let emulator = Emulator {
             cpu_state: cpu::CPU::new(),
+            ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom,
         };
         emulator
@@ -28,6 +31,7 @@ impl Emulator {
         let nes_rom = NesRom::new(&rom_contents).unwrap();
         Emulator {
             cpu_state: cpu::CPU::new(),
+            ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom,
         }
     }
