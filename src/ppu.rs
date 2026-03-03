@@ -17,7 +17,7 @@ pub struct PPU {
     sprite_list_ram: [u8; 256],
     secondary_sprite_list_ram: [u8; 32],
 
-    //Registers
+    //Registers: Used by CPU for communication
     pub ctrl: ControlRegister,
     pub mask: u8,
     pub status: u8,
@@ -64,6 +64,12 @@ impl PPU {
     }
 
     // https://wiki.nesdev.org/w/index.php/Mirroring
+    // Horizontal:
+    //   [ A ] [ a ]
+    //   [ B ] [ b ]
+    // Vertical:
+    //   [ A ] [ B ]
+    //   [ a ] [ b ]
     pub fn mirror_vram_addr(&self, addr: u16) -> u16 {
         let mirrored_vram = addr & 0b10111111111111; // mirror down 0x3000-0x3eff to 0x2000 - 0x2eff
         let vram_index = mirrored_vram - 0x2000; // to vram vector
@@ -84,16 +90,19 @@ impl PPU {
         self.increment_vram_addr();
 
         match addr {
+            // Pattern Tables (CHR ROMS)
             0..=0x1fff => {
                 let result = self.internal_data_buf;
                 self.internal_data_buf = self.chr_rom[addr as usize];
                 result
             }
+            // Name Tables ( VRAMS)
             0x2000..=0x2fff => {
                 let result = self.internal_data_buf;
                 self.internal_data_buf = self.vram[self.mirror_vram_addr(addr) as usize];
                 result
             }
+            // Palettes
             0x3000..=0x3eff => panic!(
                 "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
                 addr
@@ -123,6 +132,7 @@ impl AddrRegister {
         self.value.1 = (data & 0xff) as u8;
     }
 
+    // flipping boolean each time so we know we interact with high pointer or low pointer
     pub fn update(&mut self, data: u8) {
         if self.high_ptr {
             self.value.0 = data;
