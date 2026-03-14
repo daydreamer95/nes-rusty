@@ -3,7 +3,7 @@ pub mod ppu;
 pub mod virtual_nes;
 
 use mos6502::cpu;
-use mos6502::cpu::Mem;
+//use mos6502::cpu::Mem;
 use mos6502::ops_code;
 use rand::Rng;
 use rand::thread_rng;

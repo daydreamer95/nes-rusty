@@ -1,4 +1,3 @@
-use crate::bus::Bus;
 use crate::ops_code::OPCODES_MAP;
 use crate::ops_code::Opcode;
 use std::collections::HashMap;
@@ -51,7 +50,6 @@ pub struct CPU {
     // 0 - Carry
     pub flags: u8,
     memory: [u8; MEMORY_SIZE as usize], // 16 bit address model. Going from $0000 to $FFFF
-    pub bus: Bus,
 }
 
 impl Default for CPU {
@@ -65,38 +63,32 @@ impl Default for CPU {
             stack_pointer: 0,
             flags: 0,
             memory: memory,
-            bus: Bus::new(),
         }
     }
 }
 
-pub trait Mem {
-    fn mem_read(&self, addr: u16) -> u8;
-    fn mem_write(&mut self, addr: u16, data: u8);
+impl CPU {
+    pub fn mem_read(&self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
 
-    fn mem_read_u16(&self, addr: u16) -> u16 {
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize] = data
+    }
+
+    pub fn mem_read_u16(&self, addr: u16) -> u16 {
         let lsb = self.mem_read(addr) as u16;
         let msb = self.mem_read(addr + 1) as u16;
 
         (msb << 8) | (lsb as u16)
     }
 
-    fn mem_write_u16(&mut self, addr: u16, data: u16) {
+    pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
         let lsb = (data & 0xFF) as u8;
         let hsb = (data >> 8) as u8;
 
         self.mem_write(addr, lsb);
         self.mem_write(addr + 1, hsb);
-    }
-}
-
-impl Mem for CPU {
-    fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
-    }
-
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data
     }
 }
 
