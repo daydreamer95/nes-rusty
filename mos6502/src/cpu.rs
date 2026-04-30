@@ -91,7 +91,10 @@ pub trait Context: Sized {
 }
 
 pub trait Interface: Sized + Context {
-    fn run_with_callback(&mut self) {
+    fn run_with_callback<F>(&mut self, mut callback: F)
+    where
+        F: FnMut(&mut Self),
+    {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
@@ -225,7 +228,7 @@ pub trait Interface: Sized + Context {
                 self.state_mut().program_counter += (current_opcode.bytes - 1) as u16;
             }
 
-            //callback(self);
+            callback(self);
         }
     }
 
@@ -372,6 +375,7 @@ pub trait Interface: Sized + Context {
         self.state_mut().register_y = 0;
         self.state_mut().flags = 0b100100;
         self.state_mut().program_counter = self.mem_read_u16(RESET_INTERRUPT_ADDR);
+        // self.state_mut().program_counter = self.mem_read_u16(0xC000);
     }
 }
 

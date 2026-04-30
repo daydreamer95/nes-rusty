@@ -1,6 +1,56 @@
 use crate::cartridge;
 use bitflags::bitflags;
 
+pub trait Context: Sized {
+    fn state_mut(&mut self) -> &mut PPU;
+    fn state(&self) -> &PPU;
+
+    fn mem_read(&self, addr: u16) -> u8;
+    fn mem_write(&mut self, addr: u16, data: u8);
+
+    fn peek_video_memory(&self, _address: u16) -> u8;
+    fn poke_video_memory(&mut self, _address: u16, _value: u8);
+}
+
+pub trait Interface: Sized + Context {
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        self.state_mut().addr.update(data);
+    }
+
+    fn mem_read(&mut self, addr: u16) -> u8 {
+        let addr = self.state().addr.get();
+        self.increment_vram_addr();
+
+        match addr {
+            // Pattern Tables (CHR ROMS)
+            0..=0x1fff => {
+                let result = self.state().internal_data_buf;
+                self.state_mut().internal_data_buf = self.state().chr_rom[addr as usize];
+                result
+            }
+            // Name Tables ( VRAMS) or we can call screen state
+            // 4 KiB of addressable space. Two "additional" screens have to be mapped to existing ones.
+            // The way they are mapped depends on the mirroring type, specified by a game (iNES files have this info in the header)
+            0x2000..=0x2fff => {
+                let result = self.state().internal_data_buf;
+                self.state_mut().internal_data_buf =
+                    self.state().vram[self.mirror_vram_addr(addr) as usize];
+                result
+            }
+            // Palettes
+            0x3000..=0x3eff => panic!(
+                "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
+                addr
+            ),
+            //0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
+            _ => panic!("unexpected access to mirrored space {}", addr),
+        }
+    }
+}
+
+impl<T: Context> Interface for T {}
+impl<T: Context> Private for T {}
+
 //https://www.nesdev.org/wiki/PPU_registers
 pub struct PPU {
     internal_data_buf: u8,
@@ -51,9 +101,9 @@ impl PPU {
         }
     }
 
-    fn write_to_ppu_addr(&mut self, data: u8) {
-        self.addr.update(data);
-    }
+    // fn mem_write(&mut self, data: u8) {
+    //     self.addr.update(data);
+    // }
 
     fn write_to_ctrl(&mut self, data: u8) {
         self.ctrl.update(data);
@@ -85,32 +135,65 @@ impl PPU {
         }
     }
 
-    fn read_data(&mut self) -> u8 {
-        let addr = self.addr.get();
-        self.increment_vram_addr();
+    // fn mem_read(&mut self) -> u8 {
+    //     let addr = self.addr.get();
+    //     self.increment_vram_addr();
+    //
+    //     match addr {
+    //         // Pattern Tables (CHR ROMS)
+    //         0..=0x1fff => {
+    //             let result = self.internal_data_buf;
+    //             self.internal_data_buf = self.chr_rom[addr as usize];
+    //             result
+    //         }
+    //         // Name Tables ( VRAMS) or we can call screen state
+    //         // 4 KiB of addressable space. Two "additional" screens have to be mapped to existing ones.
+    //         // The way they are mapped depends on the mirroring type, specified by a game (iNES files have this info in the header)
+    //         0x2000..=0x2fff => {
+    //             let result = self.internal_data_buf;
+    //             self.internal_data_buf = self.vram[self.mirror_vram_addr(addr) as usize];
+    //             result
+    //         }
+    //         // Palettes
+    //         0x3000..=0x3eff => panic!(
+    //             "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
+    //             addr
+    //         ),
+    //         //0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
+    //         _ => panic!("unexpected access to mirrored space {}", addr),
+    //     }
+    // }
+}
 
-        match addr {
-            // Pattern Tables (CHR ROMS)
-            0..=0x1fff => {
-                let result = self.internal_data_buf;
-                self.internal_data_buf = self.chr_rom[addr as usize];
-                result
+trait Private: Sized + Context {
+    fn write_to_ctrl(&mut self, data: u8) {
+        self.state_mut().ctrl.update(data);
+    }
+
+    fn increment_vram_addr(&mut self) {
+        let vram_address = self.state_mut().ctrl.vram_addr_increment();
+        self.state_mut().addr.increment(vram_address);
+    }
+
+    // https://wiki.nesdev.org/w/index.php/Mirroring
+    // Horizontal:
+    //   [ A ] [ a ]
+    //   [ B ] [ b ]
+    // Vertical:
+    //   [ A ] [ B ]
+    //   [ a ] [ b ]
+    fn mirror_vram_addr(&self, addr: u16) -> u16 {
+        let mirrored_vram = addr & 0b10111111111111; // mirror down 0x3000-0x3eff to 0x2000 - 0x2eff
+        let vram_index = mirrored_vram - 0x2000; // to vram vector
+        let name_table = vram_index / 0x400; // to the name table index
+        match (&self.state().mirroring, name_table) {
+            (cartridge::Mirroring::Vertical, 2) | (cartridge::Mirroring::Vertical, 3) => {
+                vram_index - 0x800
             }
-            // Name Tables ( VRAMS) or we can call screen state
-            // 4 KiB of addressable space. Two "additional" screens have to be mapped to existing ones.
-            // The way they are mapped depends on the mirroring type, specified by a game (iNES files have this info in the header)
-            0x2000..=0x2fff => {
-                let result = self.internal_data_buf;
-                self.internal_data_buf = self.vram[self.mirror_vram_addr(addr) as usize];
-                result
-            }
-            // Palettes
-            0x3000..=0x3eff => panic!(
-                "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
-                addr
-            ),
-            //0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
-            _ => panic!("unexpected access to mirrored space {}", addr),
+            (cartridge::Mirroring::Horizontal, 2) => vram_index - 0x400,
+            (cartridge::Mirroring::Horizontal, 1) => vram_index - 0x400,
+            (cartridge::Mirroring::Horizontal, 3) => vram_index - 0x800,
+            _ => vram_index,
         }
     }
 }

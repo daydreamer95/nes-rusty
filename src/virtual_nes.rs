@@ -123,16 +123,17 @@ impl<T: Context> Interface for T {}
 
 pub trait Private: Sized + Context {
     fn mem_read(&self, addr: u16) -> u8 {
-        println!("mem_read good way {:X}", addr);
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.state().cpu_vram[mirror_down_addr as usize]
             }
             PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-                let _mirror_down_addr = addr & 0b00100000_00000111;
+                panic!("Attempt to read from write-only PPU address {:x}", addr);
                 return 0;
-                //self.state().ppu_state.mem_read(_mirror_down_addr)
+                // let _mirror_down_addr = addr & 0b00100000_00000111;
+                // self.state().ppu_state.mem_read(_mirror_down_addr)
+                // ppu::Interface::mem_read(self.state_mut(), _mirror_down_addr)
             }
             0x8000..=0xFFFF => self.state().read_prg_rom(addr),
             _ => {
@@ -143,7 +144,6 @@ pub trait Private: Sized + Context {
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
-        println!("write address {:X}", addr);
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b11111111111;
@@ -154,8 +154,13 @@ pub trait Private: Sized + Context {
                 // 0
             }
             PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
+                panic!("Attempt to read from write-only PPU address {:x}", addr);
                 let _mirror_down_addr = addr & 0b00100000_00000111;
-                //self.state_mut().ppu_state.mem_write(_mirror_down_addr, data);
+                // self.state_mut()
+                //     .ppu_state
+                //     .mem_write(_mirror_down_addr, data);
+
+                // ppu::Interface::mem_write(self.state_mut(), _mirror_down_addr)
             }
             0x8000..=0xFFFF => {
                 panic!("Attempt to write to Cartridge ROM space")
@@ -164,10 +169,6 @@ pub trait Private: Sized + Context {
                 println!("Ignoring mem write-access at {}", addr);
             }
         }
-    }
-
-    fn run_with_callback(&mut self) {
-        cpu::Interface::run_with_callback(self.newtype_mut());
     }
 }
 
@@ -193,12 +194,9 @@ pub trait Interface: Sized + Context {
     where
         F: FnMut(&mut Emulator),
     {
-        loop {
-            //let code = self.mem_read(self.cpu_state.program_counter);
-            Private::run_with_callback(self.state_mut());
-            //self.cpu_state.run();
-            callback(&mut self.state_mut());
-        }
+        cpu::Interface::run_with_callback(self.newtype_mut(), move |orphan| {
+            callback(orphan.as_mut().state_mut());
+        });
     }
 
     // reset response for program state. Must be reset before program ROM actually run
@@ -207,7 +205,6 @@ pub trait Interface: Sized + Context {
     // 3. RUN
     fn reset(&mut self) {
         cpu::Interface::reset(self.newtype_mut());
-        //self.cpu_state.reset();
     }
 }
 
@@ -229,4 +226,30 @@ impl<C: Context> cpu::Context for Orphan<C> {
     fn mem_write(&mut self, addr: u16, data: u8) {
         Private::mem_write(self.as_mut(), addr, data)
     }
+}
+
+impl<C: Context> ppu::Context for Orphan<C> {
+    #[inline]
+    fn state_mut(&mut self) -> &mut ppu::PPU {
+        &mut self.as_mut().state_mut().ppu_state
+    }
+
+    #[inline]
+    fn state(&self) -> &ppu::PPU {
+        &self.as_ref().state().ppu_state
+    }
+
+    fn mem_read(&self, addr: u16) -> u8 {
+        Private::mem_read(self.as_ref(), addr)
+    }
+
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        Private::mem_write(self.as_mut(), addr, data)
+    }
+
+    fn peek_video_memory(&self, _address: u16) -> u8 {
+        return 0;
+    }
+
+    fn poke_video_memory(&mut self, _address: u16, _value: u8) {}
 }

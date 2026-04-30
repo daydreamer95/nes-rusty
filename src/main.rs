@@ -64,20 +64,17 @@ fn main() {
         .unwrap();
     //...//
     //let mut cpu = cpu::CPU::new();
-    let games_code: &Vec<u8> = &(*SNAKE_GAME_CODE);
+    //let games_code: &Vec<u8> = &(*SNAKE_GAME_CODE);
 
-    let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
-    // let mut emulator =
-    //     virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/snake.nes".to_string());
+    // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
+    let mut emulator =
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/snake.nes".to_string());
 
-    //emulator.cpu_state.load_program(games_code.clone());
     virtual_nes::Interface::reset(&mut emulator);
-    // emulator.reset();
 
     let mut screen_state = [0 as u8; 32 * 3 * 32];
     let mut rng = rand::thread_rng();
 
-    //virtual_nes::Interface::run(&mut emulator);
     virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
         handle_user_input(emulator, &mut event_pump);
         virtual_nes::Private::mem_write(emulator, 0xfe, rng.gen_range(1, 16));
@@ -88,21 +85,8 @@ fn main() {
             canvas.present();
         }
 
-        std::thread::sleep(std::time::Duration::new(0, 900_000));
+        std::thread::sleep(std::time::Duration::new(0, 90_000));
     });
-
-    //run with game cycle
-    //emulator.cpu_state.run_with_callback(move |cpu| {
-    //    handle_user_input(cpu, &mut event_pump);
-    //    cpu.mem_write(0xfe, rng.gen_range(1, 16));
-    //    if read_screen_state(cpu, &mut screen_state) {
-    //        texture.update(None, &screen_state, 32 * 3).unwrap();
-    //        canvas.copy(&texture, None, None).unwrap();
-    //        canvas.present();
-    //    }
-
-    //    std::thread::sleep(std::time::Duration::new(0, 90_000));
-    //});
 }
 
 fn handle_user_input(emulator: &mut virtual_nes::Emulator, event_pump: &mut EventPump) {
