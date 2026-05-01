@@ -10,6 +10,8 @@ pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,
     pub ppu_state: ppu::PPU,
+    // Keep track of cycles
+    cycles: usize,
 }
 
 impl Emulator {
@@ -24,6 +26,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
+            cycles: 0,
         };
         emulator
     }
@@ -37,6 +40,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
+            cycles: 0,
         };
         println!(
             "debug im start to write program rom with len {}",
@@ -59,18 +63,6 @@ impl Emulator {
         }
         self.nes_rom.prg_rom[addr as usize]
     }
-
-    // pub fn run_with_callback<F>(&mut self, mut callback: F)
-    // where
-    //     F: FnMut(&mut Emulator),
-    // {
-    //     loop {
-    //         //let code = self.mem_read(self.cpu_state.program_counter);
-    //         cpu::Interface::run_with_callback(self.new(), callback);
-    //         //self.cpu_state.run();
-    //         //callback(self);
-    //     }
-    // }
 }
 
 impl Context for Emulator {

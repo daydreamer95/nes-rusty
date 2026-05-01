@@ -101,10 +101,6 @@ impl PPU {
         }
     }
 
-    // fn mem_write(&mut self, data: u8) {
-    //     self.addr.update(data);
-    // }
-
     fn write_to_ctrl(&mut self, data: u8) {
         self.ctrl.update(data);
     }
@@ -134,35 +130,6 @@ impl PPU {
             _ => vram_index,
         }
     }
-
-    // fn mem_read(&mut self) -> u8 {
-    //     let addr = self.addr.get();
-    //     self.increment_vram_addr();
-    //
-    //     match addr {
-    //         // Pattern Tables (CHR ROMS)
-    //         0..=0x1fff => {
-    //             let result = self.internal_data_buf;
-    //             self.internal_data_buf = self.chr_rom[addr as usize];
-    //             result
-    //         }
-    //         // Name Tables ( VRAMS) or we can call screen state
-    //         // 4 KiB of addressable space. Two "additional" screens have to be mapped to existing ones.
-    //         // The way they are mapped depends on the mirroring type, specified by a game (iNES files have this info in the header)
-    //         0x2000..=0x2fff => {
-    //             let result = self.internal_data_buf;
-    //             self.internal_data_buf = self.vram[self.mirror_vram_addr(addr) as usize];
-    //             result
-    //         }
-    //         // Palettes
-    //         0x3000..=0x3eff => panic!(
-    //             "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
-    //             addr
-    //         ),
-    //         //0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
-    //         _ => panic!("unexpected access to mirrored space {}", addr),
-    //     }
-    // }
 }
 
 trait Private: Sized + Context {
