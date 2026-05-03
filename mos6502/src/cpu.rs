@@ -88,16 +88,42 @@ pub trait Context: Sized {
         self.mem_write(addr, lsb);
         self.mem_write(addr + 1, hsb);
     }
+
+    fn interrupt_nmi(&mut self) {
+        let mut pc = self.state().program_counter;
+        let lsb = (pc & 0xFF) as u8;
+        let hsb = (pc >> 8) as u8;
+        self.mem_write(self.get_address_from_stack(), lsb);
+        self.insert_address_into_stack();
+        self.mem_write(self.get_address_from_stack(), hsb);
+        self.insert_address_into_stack();
+
+        let mut current_state_flag = self.state().flags;
+        current_state_flag |= 0b0010_0000; // set break flag
+        current_state_flag |= 0b0010_0000; // set break flag
+        //
+        //
+        self.mem_write(self.get_address_from_stack(), current_state_flag);
+        self.insert_address_into_stack();
+
+        // self.state_mut().tick();
+        self.state_mut().program_counter = self.mem_read_u16(0xfffA);
+    }
 }
 
 pub trait Interface: Sized + Context {
     fn run_with_callback<F>(&mut self, mut callback: F)
+    // nmi_status: Option<u8>)
     where
         F: FnMut(&mut Self),
     {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
+            // if let Some(_nmi) = nmi_status {
+            //     self.interrupt_nmi();
+            // }
+
             let code = self.mem_read(self.state().program_counter);
             self.state_mut().program_counter += 1;
             let current_program_counter_state = self.state().program_counter;

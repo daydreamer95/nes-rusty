@@ -46,6 +46,32 @@ pub trait Interface: Sized + Context {
             _ => panic!("unexpected access to mirrored space {}", addr),
         }
     }
+
+    fn tick(&mut self, cycles: u8) -> bool {
+        self.state_mut().cycles += cycles as usize;
+        if self.state().cycles >= 341 {
+            self.state_mut().cycles -= 341;
+            self.state_mut().scanline += 1;
+
+            if self.state().scanline == 241 {
+                self.state_mut().status.set_vblank_status(true);
+                self.state_mut().status.set_sprite_zero_hit(true);
+                if self.state_mut().ctrl.generate_vblank_nmi() {
+                    self.state_mut().nmi_interrupt = Some(1);
+                }
+            }
+
+            if self.state().scanline >= 262 {
+                self.state_mut().scanline = 0;
+                self.state_mut().nmi_interrupt = Some(0);
+                self.state_mut().status.set_sprite_zero_hit(true);
+                self.state_mut().status.reset_vblank_status();
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 impl<T: Context> Interface for T {}
@@ -67,12 +93,17 @@ pub struct PPU {
     sprite_list_ram: [u8; 256],
     secondary_sprite_list_ram: [u8; 32],
 
+    // Cycles
+    cycles: usize,
+    scanline: u16,
+    pub nmi_interrupt: Option<u8>,
+
     //Registers: Used by CPU for communication
     pub ctrl: ControlRegister,
-    pub mask: u8,
-    pub status: u8,
+    pub mask: MaskRegister,
+    pub status: StatusRegister,
     pub oam_addr: u8,
-    pub scroll: u8,
+    pub scroll: ScrollRegister,
     pub addr: AddrRegister,
     pub data: u8,
     pub oam_dma: u8,
@@ -86,11 +117,11 @@ impl PPU {
             sprite_list_ram: [0; 256],
             secondary_sprite_list_ram: [0; 32],
             ctrl: ControlRegister::new(),
-            mask: 0,
-            status: 0,
+            mask: MaskRegister::new(),
+            status: StatusRegister::new(),
             oam_addr: 0,
             oam_data: [0; 256],
-            scroll: 0,
+            scroll: ScrollRegister::new(),
             addr: AddrRegister::new(),
             data: 0,
             oam_dma: 0,
@@ -98,11 +129,18 @@ impl PPU {
             palette_table: [0; 32],
             vram: [0; 2048],
             mirroring: mirroring,
+            cycles: 0,
+            scanline: 0,
+            nmi_interrupt: None,
         }
     }
 
     fn write_to_ctrl(&mut self, data: u8) {
+        let before_nmi_status = self.ctrl.generate_vblank_nmi();
         self.ctrl.update(data);
+        if !before_nmi_status && self.ctrl.generate_vblank_nmi() && self.status.is_in_vblank() {
+            self.nmi_interrupt = Some(1);
+        }
     }
 
     fn increment_vram_addr(&mut self) {
@@ -129,6 +167,10 @@ impl PPU {
             (cartridge::Mirroring::Horizontal, 3) => vram_index - 0x800,
             _ => vram_index,
         }
+    }
+
+    pub fn poll_nmi_interrupt(&mut self) -> Option<u8> {
+        self.nmi_interrupt.take()
     }
 }
 
@@ -263,5 +305,179 @@ impl ControlRegister {
 
     pub fn update(&mut self, data: u8) {
         self.bits = data;
+    }
+
+    fn generate_vblank_nmi(&mut self) -> bool {
+        return self.contains(ControlRegister::GENERATE_NMI);
+    }
+}
+
+bitflags! {
+
+    // 7  bit  0
+    // ---- ----
+    // BGRs bMmG
+    // |||| ||||
+    // |||| |||+- Greyscale (0: normal color, 1: produce a greyscale display)
+    // |||| ||+-- 1: Show background in leftmost 8 pixels of screen, 0: Hide
+    // |||| |+--- 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
+    // |||| +---- 1: Show background
+    // |||+------ 1: Show sprites
+    // ||+------- Emphasize red
+    // |+-------- Emphasize green
+    // +--------- Emphasize blue
+    pub struct MaskRegister: u8 {
+        const GREYSCALE               = 0b00000001;
+        const LEFTMOST_8PXL_BACKGROUND  = 0b00000010;
+        const LEFTMOST_8PXL_SPRITE      = 0b00000100;
+        const SHOW_BACKGROUND         = 0b00001000;
+        const SHOW_SPRITES            = 0b00010000;
+        const EMPHASISE_RED           = 0b00100000;
+        const EMPHASISE_GREEN         = 0b01000000;
+        const EMPHASISE_BLUE          = 0b10000000;
+    }
+}
+
+pub enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+impl MaskRegister {
+    pub fn new() -> Self {
+        MaskRegister::from_bits_truncate(0b00000000)
+    }
+
+    pub fn is_grayscale(&self) -> bool {
+        self.contains(MaskRegister::GREYSCALE)
+    }
+
+    pub fn leftmost_8pxl_background(&self) -> bool {
+        self.contains(MaskRegister::LEFTMOST_8PXL_BACKGROUND)
+    }
+
+    pub fn leftmost_8pxl_sprite(&self) -> bool {
+        self.contains(MaskRegister::LEFTMOST_8PXL_SPRITE)
+    }
+
+    pub fn show_background(&self) -> bool {
+        self.contains(MaskRegister::SHOW_BACKGROUND)
+    }
+
+    pub fn show_sprites(&self) -> bool {
+        self.contains(MaskRegister::SHOW_SPRITES)
+    }
+
+    pub fn emphasise(&self) -> Vec<Color> {
+        let mut result = Vec::<Color>::new();
+        if self.contains(MaskRegister::EMPHASISE_RED) {
+            result.push(Color::Red);
+        }
+        if self.contains(MaskRegister::EMPHASISE_BLUE) {
+            result.push(Color::Blue);
+        }
+        if self.contains(MaskRegister::EMPHASISE_GREEN) {
+            result.push(Color::Green);
+        }
+
+        result
+    }
+
+    pub fn update(&mut self, data: u8) {
+        self.bits = data;
+    }
+}
+
+pub struct ScrollRegister {
+    pub scroll_x: u8,
+    pub scroll_y: u8,
+    pub latch: bool,
+}
+
+impl ScrollRegister {
+    pub fn new() -> Self {
+        ScrollRegister {
+            scroll_x: 0,
+            scroll_y: 0,
+            latch: false,
+        }
+    }
+
+    pub fn write(&mut self, data: u8) {
+        if !self.latch {
+            self.scroll_x = data;
+        } else {
+            self.scroll_y = data;
+        }
+        self.latch = !self.latch;
+    }
+
+    pub fn reset_latch(&mut self) {
+        self.latch = false;
+    }
+}
+
+bitflags! {
+
+    // 7  bit  0
+    // ---- ----
+    // VSO. ....
+    // |||| ||||
+    // |||+-++++- Least significant bits previously written into a PPU register
+    // |||        (due to register not being updated for this address)
+    // ||+------- Sprite overflow. The intent was for this flag to be set
+    // ||         whenever more than eight sprites appear on a scanline, but a
+    // ||         hardware bug causes the actual behavior to be more complicated
+    // ||         and generate false positives as well as false negatives; see
+    // ||         PPU sprite evaluation. This flag is set during sprite
+    // ||         evaluation and cleared at dot 1 (the second dot) of the
+    // ||         pre-render line.
+    // |+-------- Sprite 0 Hit.  Set when a nonzero pixel of sprite 0 overlaps
+    // |          a nonzero background pixel; cleared at dot 1 of the pre-render
+    // |          line.  Used for raster timing.
+    // +--------- Vertical blank has started (0: not in vblank; 1: in vblank).
+    //            Set at dot 1 of line 241 (the line *after* the post-render
+    //            line); cleared after reading $2002 and at dot 1 of the
+    //            pre-render line.
+    pub struct StatusRegister: u8 {
+        const NOTUSED          = 0b00000001;
+        const NOTUSED2         = 0b00000010;
+        const NOTUSED3         = 0b00000100;
+        const NOTUSED4         = 0b00001000;
+        const NOTUSED5         = 0b00010000;
+        const SPRITE_OVERFLOW  = 0b00100000;
+        const SPRITE_ZERO_HIT  = 0b01000000;
+        const VBLANK_STARTED   = 0b10000000;
+    }
+}
+
+impl StatusRegister {
+    pub fn new() -> Self {
+        StatusRegister::from_bits_truncate(0b00000000)
+    }
+
+    pub fn set_vblank_status(&mut self, status: bool) {
+        self.set(StatusRegister::VBLANK_STARTED, status);
+    }
+
+    pub fn set_sprite_zero_hit(&mut self, status: bool) {
+        self.set(StatusRegister::SPRITE_ZERO_HIT, status);
+    }
+
+    pub fn set_sprite_overflow(&mut self, status: bool) {
+        self.set(StatusRegister::SPRITE_OVERFLOW, status);
+    }
+
+    pub fn reset_vblank_status(&mut self) {
+        self.remove(StatusRegister::VBLANK_STARTED);
+    }
+
+    pub fn is_in_vblank(&self) -> bool {
+        self.contains(StatusRegister::VBLANK_STARTED)
+    }
+
+    pub fn snapshot(&self) -> u8 {
+        self.bits
     }
 }

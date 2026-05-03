@@ -10,7 +10,7 @@ pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,
     pub ppu_state: ppu::PPU,
-    // Keep track of cycles
+    // Keep track of cycles. act as cpu cycles
     cycles: usize,
 }
 
@@ -62,6 +62,10 @@ impl Emulator {
             addr = addr % 0x4000;
         }
         self.nes_rom.prg_rom[addr as usize]
+    }
+
+    fn poll_nmi_status(&mut self) -> Option<u8> {
+        return ppu::PPU::poll_nmi_interrupt(&mut self.ppu_state).take();
     }
 }
 
@@ -162,6 +166,15 @@ pub trait Private: Sized + Context {
             }
         }
     }
+
+    fn tick(&mut self, cycles: u8) {
+        self.state_mut().cycles += cycles as usize;
+        ppu::Interface::tick(self.newtype_mut(), cycles * 3);
+    }
+
+    // fn poll_nmi_status() -> Option<u8> {
+    //     return Some(0);
+    // }
 }
 
 pub trait Interface: Sized + Context {
@@ -175,10 +188,7 @@ pub trait Interface: Sized + Context {
 
     fn run(&mut self) {
         loop {
-            //let code = self.mem_read(self.cpu_state.program_counter);
             cpu::Interface::run(self.newtype_mut());
-            //self.cpu_state.run();
-            //callback(self);
         }
     }
 
