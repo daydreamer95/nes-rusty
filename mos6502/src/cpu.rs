@@ -50,6 +50,8 @@ pub struct CPU {
     // 0 - Carry
     pub flags: u8,
     memory: [u8; MEMORY_SIZE as usize], // 16 bit address model. Going from $0000 to $FFFF
+    // Keep track of cycles. act as cpu cycles
+    cycles: usize,
 }
 
 impl Default for CPU {
@@ -63,6 +65,7 @@ impl Default for CPU {
             stack_pointer: 0,
             flags: 0,
             memory: memory,
+            cycles: 0,
         }
     }
 }
@@ -112,17 +115,19 @@ pub trait Context: Sized {
 }
 
 pub trait Interface: Sized + Context {
-    fn run_with_callback<F>(&mut self, mut callback: F)
-    // nmi_status: Option<u8>)
-    where
+    fn run_with_callback<F>(
+        &mut self,
+        mut callback: F,
+        poll_nmi_interrupt: fn(&mut Self) -> Option<u8>,
+    ) where
         F: FnMut(&mut Self),
     {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
-            // if let Some(_nmi) = nmi_status {
-            //     self.interrupt_nmi();
-            // }
+            if let Some(_nmi) = poll_nmi_interrupt(self) {
+                self.interrupt_nmi();
+            }
 
             let code = self.mem_read(self.state().program_counter);
             self.state_mut().program_counter += 1;

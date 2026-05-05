@@ -47,6 +47,10 @@ pub trait Interface: Sized + Context {
         }
     }
 
+    fn poll_nmi_interrupt(&mut self) -> Option<u8> {
+        self.state_mut().nmi_interrupt.take()
+    }
+
     fn tick(&mut self, cycles: u8) -> bool {
         self.state_mut().cycles += cycles as usize;
         if self.state().cycles >= 341 {
@@ -167,10 +171,6 @@ impl PPU {
             (cartridge::Mirroring::Horizontal, 3) => vram_index - 0x800,
             _ => vram_index,
         }
-    }
-
-    pub fn poll_nmi_interrupt(&mut self) -> Option<u8> {
-        self.nmi_interrupt.take()
     }
 }
 

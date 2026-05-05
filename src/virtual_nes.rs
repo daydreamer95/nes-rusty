@@ -10,8 +10,6 @@ pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,
     pub ppu_state: ppu::PPU,
-    // Keep track of cycles. act as cpu cycles
-    cycles: usize,
 }
 
 impl Emulator {
@@ -26,7 +24,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
-            cycles: 0,
+            // cycles: 0,
         };
         emulator
     }
@@ -40,7 +38,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
-            cycles: 0,
+            // cycles: 0,
         };
         println!(
             "debug im start to write program rom with len {}",
@@ -62,10 +60,6 @@ impl Emulator {
             addr = addr % 0x4000;
         }
         self.nes_rom.prg_rom[addr as usize]
-    }
-
-    fn poll_nmi_status(&mut self) -> Option<u8> {
-        return ppu::PPU::poll_nmi_interrupt(&mut self.ppu_state).take();
     }
 }
 
@@ -168,13 +162,9 @@ pub trait Private: Sized + Context {
     }
 
     fn tick(&mut self, cycles: u8) {
-        self.state_mut().cycles += cycles as usize;
+        // self.state_mut().cycles += cycles as usize;
         ppu::Interface::tick(self.newtype_mut(), cycles * 3);
     }
-
-    // fn poll_nmi_status() -> Option<u8> {
-    //     return Some(0);
-    // }
 }
 
 pub trait Interface: Sized + Context {
@@ -196,9 +186,13 @@ pub trait Interface: Sized + Context {
     where
         F: FnMut(&mut Emulator),
     {
-        cpu::Interface::run_with_callback(self.newtype_mut(), move |orphan| {
-            callback(orphan.as_mut().state_mut());
-        });
+        cpu::Interface::run_with_callback(
+            self.newtype_mut(),
+            move |orphan| {
+                callback(orphan.as_mut().state_mut());
+            },
+            move |orphan| ppu::Interface::poll_nmi_interrupt(orphan.as_mut().newtype_mut()),
+        );
     }
 
     // reset response for program state. Must be reset before program ROM actually run
