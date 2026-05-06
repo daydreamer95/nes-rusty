@@ -84,7 +84,7 @@ trait Context: Sized {
     //fn mem_read(&self, addr: u16) -> u8 {}
     //fn mem_write(&mut self, addr: u16, data: u8) {}
 
-    fn mem_read(&self, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16) -> u8 {
         self.state().cpu_vram[addr as usize]
     }
 
@@ -92,7 +92,7 @@ trait Context: Sized {
         self.state_mut().cpu_vram[addr as usize] = data
     }
 
-    fn mem_read_u16(&self, addr: u16) -> u16 {
+    fn mem_read_u16(&mut self, addr: u16) -> u16 {
         let lsb = self.mem_read(addr) as u16;
         let msb = self.mem_read(addr + 1) as u16;
 
@@ -112,22 +112,43 @@ impl<T: Context> Private for T {}
 impl<T: Context> Interface for T {}
 
 pub trait Private: Sized + Context {
-    fn mem_read(&self, addr: u16) -> u8 {
+    fn mem_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM..=RAM_MIRRORS_END => {
                 let mirror_down_addr = addr & 0b00000111_11111111;
                 self.state().cpu_vram[mirror_down_addr as usize]
             }
-            PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-                panic!("Attempt to read from write-only PPU address {:x}", addr);
-                return 0;
+            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
+                // panic!("Attempt to read from write-only PPU address {:x}", addr);
+                0
+            }
+            0x2002 => ppu::Interface::read_status(self.newtype_mut()),
+            0x2004 => ppu::Interface::read_oam_data(self.newtype_mut()),
+            0x2007 => ppu::Interface::read_data(self.newtype_mut()),
+            0x4000..=0x4015 => {
+                //ignore APU
+                0
+            }
+            0x4016 => {
+                // ignore joypad 1;
+                0
+            }
+
+            0x4017 => {
+                // ignore joypad 2
+                0
+            }
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                println!("PPU read");
+                ppu::Interface::mem_read(self.newtype_mut(), addr)
+                // panic!("Attempt to read from write-only PPU address {:x}", addr);
+                // return 0;
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
-                // self.state().ppu_state.mem_read(_mirror_down_addr)
-                // ppu::Interface::mem_read(self.state_mut(), _mirror_down_addr)
+                // self.state_mut().mem_read(_mirror_down_addr)
             }
             0x8000..=0xFFFF => self.state().read_prg_rom(addr),
             _ => {
-                println!("Ignoring mem access at {}", addr);
+                println!("Ignoring mem access at {:x}", addr);
                 0
             }
         }
@@ -139,13 +160,60 @@ pub trait Private: Sized + Context {
                 let mirror_down_addr = addr & 0b11111111111;
                 self.state_mut().cpu_vram[mirror_down_addr as usize] = data;
             }
-            0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
-                panic!("Attempt to read from write-only PPU address {:x}", addr);
-                // 0
+            0x2000 => {
+                ppu::Interface::write_to_ctrl(self.newtype_mut(), data);
             }
-            PPU_REGISTERS..=PPU_REGISTERS_MIRRORS_END => {
-                panic!("Attempt to read from write-only PPU address {:x}", addr);
-                let _mirror_down_addr = addr & 0b00100000_00000111;
+            0x2001 => {
+                ppu::Interface::write_to_mask(self.newtype_mut(), data);
+            }
+            0x2002 => panic!("attempt to write to PPU status register"),
+            0x2003 => {
+                ppu::Interface::write_to_oam_addr(self.newtype_mut(), data);
+            }
+            0x2004 => {
+                ppu::Interface::write_to_oam_data(self.newtype_mut(), data);
+            }
+            0x2005 => {
+                ppu::Interface::write_to_scroll(self.newtype_mut(), data);
+            }
+
+            0x2006 => {
+                ppu::Interface::write_to_ppu_addr(self.newtype_mut(), data);
+            }
+            0x2007 => {
+                ppu::Interface::write_to_oam_data(self.newtype_mut(), data);
+            }
+            0x4000..=0x4013 | 0x4015 => {
+                //ignore APU
+            }
+
+            0x4016 => {
+                // ignore joypad 1;
+            }
+
+            0x4017 => {
+                // ignore joypad 2
+            }
+
+            // https://wiki.nesdev.com/w/index.php/PPU_programmer_reference#OAM_DMA_.28.244014.29_.3E_write
+            0x4014 => {
+                let mut buffer: [u8; 256] = [0; 256];
+                let hi: u16 = (data as u16) << 8;
+                for i in 0..256u16 {
+                    buffer[i as usize] = Private::mem_read(self, hi + i);
+                }
+
+                // ppu::Interface::write_to_oam_data(self.newtype_mut(), &buffer);
+
+                // todo: handle this eventually
+                // let add_cycles: u16 = if self.cycles % 2 == 1 { 514 } else { 513 };
+                // self.tick(add_cycles); //todo this will cause weird effects as PPU will have 513/514 * 3 ticks
+            }
+            0x2008..=PPU_REGISTERS_MIRRORS_END => {
+                println!("PPU write");
+                ppu::Interface::mem_write(self.newtype_mut(), addr, data);
+                // panic!("Attempt to read from write-only PPU address {:x}", addr);
+                // let _mirror_down_addr = addr & 0b00100000_00000111;
                 // self.state_mut()
                 //     .ppu_state
                 //     .mem_write(_mirror_down_addr, data);
@@ -215,8 +283,8 @@ impl<C: Context> cpu::Context for Orphan<C> {
         &self.as_ref().state().cpu_state
     }
 
-    fn mem_read(&self, addr: u16) -> u8 {
-        Private::mem_read(self.as_ref(), addr)
+    fn mem_read(&mut self, addr: u16) -> u8 {
+        Private::mem_read(self.as_mut(), addr)
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
@@ -235,8 +303,8 @@ impl<C: Context> ppu::Context for Orphan<C> {
         &self.as_ref().state().ppu_state
     }
 
-    fn mem_read(&self, addr: u16) -> u8 {
-        Private::mem_read(self.as_ref(), addr)
+    fn mem_read(&mut self, addr: u16) -> u8 {
+        Private::mem_read(self.as_mut(), addr)
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {

@@ -9,7 +9,7 @@ pub struct Opcode {
     pub code: u8,
     pub name: &'static str,
     pub bytes: u8,
-    _cycles: u8,
+    pub _cycles: u8,
     pub addressing_mode: AddressingMode,
 }
 

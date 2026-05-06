@@ -1,6 +1,7 @@
 pub mod cartridge;
 pub mod opharn;
 pub mod ppu;
+pub mod render;
 pub mod virtual_nes;
 
 use rand::Rng;
@@ -9,6 +10,10 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
+
+use crate::render::Frame;
+use crate::render::show_tile;
+use crate::render::show_tile_bank;
 
 #[macro_use]
 extern crate lazy_static;
@@ -47,7 +52,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("Snake game", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
+        .window("Untitle", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
         .position_centered()
         .build()
         .unwrap();
@@ -60,7 +65,7 @@ fn main() {
     //...
     let creator = canvas.texture_creator();
     let mut texture = creator
-        .create_texture_target(PixelFormatEnum::RGB24, 32, 32)
+        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
     //...//
     //let mut cpu = cpu::CPU::new();
@@ -68,24 +73,63 @@ fn main() {
 
     // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
-        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/snake.nes".to_string());
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/Alter_Ego.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
 
-    let mut screen_state = [0 as u8; 32 * 3 * 32];
-    let mut rng = rand::thread_rng();
+    // let mut screen_state = [0 as u8; 32 * 3 * 32];
+    // let mut rng = rand::thread_rng();
+    //
+    // virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
+    //     handle_user_input(emulator, &mut event_pump);
+    //     virtual_nes::Private::mem_write(emulator, 0xfe, rng.gen_range(1, 16));
+    //     // cpu.mem_write(0xfe, rng.gen_range(1, 16));
+    //     if read_screen_state(emulator, &mut screen_state) {
+    //         texture.update(None, &screen_state, 32 * 3).unwrap();
+    //         canvas.copy(&texture, None, None).unwrap();
+    //         canvas.present();
+    //     }
+    //
+    //     std::thread::sleep(std::time::Duration::new(0, 90_000));
+    // });
 
+    // Display tile bank
+    // let title_frame = show_tile_bank(&mut emulator.nes_rom.chr_rom.clone(), 1);
+    // texture.update(None, &title_frame.data, 256 * 3).unwrap();
+    // canvas.copy(&texture, None, None).unwrap();
+    // canvas.present();
+    //
+    // loop {
+    //     for event in event_pump.poll_iter() {
+    //         match event {
+    //             Event::Quit { .. }
+    //             | Event::KeyDown {
+    //                 keycode: Some(Keycode::Escape),
+    //                 ..
+    //             } => std::process::exit(0),
+    //             _ => { /* do nothing */ }
+    //         }
+    //     }
+    // }
+
+    let mut frame = Frame::new();
     virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
-        handle_user_input(emulator, &mut event_pump);
-        virtual_nes::Private::mem_write(emulator, 0xfe, rng.gen_range(1, 16));
-        // cpu.mem_write(0xfe, rng.gen_range(1, 16));
-        if read_screen_state(emulator, &mut screen_state) {
-            texture.update(None, &screen_state, 32 * 3).unwrap();
-            canvas.copy(&texture, None, None).unwrap();
-            canvas.present();
-        }
+        render::render(&mut emulator.ppu_state, &mut frame);
+        texture.update(None, &frame.data, 256 * 3).unwrap();
 
-        std::thread::sleep(std::time::Duration::new(0, 90_000));
+        canvas.copy(&texture, None, None).unwrap();
+
+        canvas.present();
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => std::process::exit(0),
+                _ => { /* do nothing */ }
+            }
+        }
     });
 }
 

@@ -74,10 +74,10 @@ pub trait Context: Sized {
     fn state_mut(&mut self) -> &mut CPU;
     fn state(&self) -> &CPU;
 
-    fn mem_read(&self, addr: u16) -> u8;
+    fn mem_read(&mut self, addr: u16) -> u8;
     fn mem_write(&mut self, addr: u16, data: u8);
 
-    fn mem_read_u16(&self, addr: u16) -> u16 {
+    fn mem_read_u16(&mut self, addr: u16) -> u16 {
         let lsb = self.mem_read(addr) as u16;
         let msb = self.mem_read(addr + 1) as u16;
 
@@ -90,6 +90,10 @@ pub trait Context: Sized {
 
         self.mem_write(addr, lsb);
         self.mem_write(addr + 1, hsb);
+    }
+
+    fn tick(&mut self, cycles: u8) {
+        self.state_mut().cycles += cycles as usize;
     }
 
     fn interrupt_nmi(&mut self) {
@@ -109,7 +113,7 @@ pub trait Context: Sized {
         self.mem_write(self.get_address_from_stack(), current_state_flag);
         self.insert_address_into_stack();
 
-        // self.state_mut().tick();
+        self.tick(2);
         self.state_mut().program_counter = self.mem_read_u16(0xfffA);
     }
 }
@@ -126,6 +130,7 @@ pub trait Interface: Sized + Context {
 
         loop {
             if let Some(_nmi) = poll_nmi_interrupt(self) {
+                println!("interrupt_nmi");
                 self.interrupt_nmi();
             }
 
@@ -252,6 +257,7 @@ pub trait Interface: Sized + Context {
                 _ => return,
             }
 
+            self.tick(current_opcode._cycles);
             if current_program_counter_state == self.state().program_counter {
                 //the addressing mode is a property of an instruction that defines how the CPU should interpret the next 1 or 2 bytes in the instruction stream.
                 //Different addressing modes have different instruction sizes
@@ -453,7 +459,7 @@ trait Private: Context + Sized {
     //   self.mem_write_u16(RESET_INTERRUPT_ADDR, PROGRAM_ROM_MEMORY_ADDRESS_START);
     //}
 
-    fn get_indirect_lookup(&self, lookup_addr: u16) -> u16 {
+    fn get_indirect_lookup(&mut self, lookup_addr: u16) -> u16 {
         let lsb = self.mem_read(lookup_addr);
         let hsb = self.mem_read(lookup_addr.wrapping_add(1));
         (hsb as u16) << 8 | (lsb as u16)
@@ -575,7 +581,7 @@ trait Private: Context + Sized {
         self.mem_read((STACK_STARTING_POINTER as u16) + self.state().stack_pointer as u16)
     }
 
-    fn get_operand_addr(&self, mode: &AddressingMode) -> u16 {
+    fn get_operand_addr(&mut self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.state().program_counter,
             AddressingMode::ZeroPage => self.mem_read(self.state().program_counter) as u16,

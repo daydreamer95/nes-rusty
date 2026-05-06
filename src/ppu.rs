@@ -1,11 +1,11 @@
-use crate::cartridge;
+use crate::{cartridge, opharn::Orphan};
 use bitflags::bitflags;
 
 pub trait Context: Sized {
     fn state_mut(&mut self) -> &mut PPU;
     fn state(&self) -> &PPU;
 
-    fn mem_read(&self, addr: u16) -> u8;
+    fn mem_read(&mut self, addr: u16) -> u8;
     fn mem_write(&mut self, addr: u16, data: u8);
 
     fn peek_video_memory(&self, _address: u16) -> u8;
@@ -13,8 +13,24 @@ pub trait Context: Sized {
 }
 
 pub trait Interface: Sized + Context {
-    fn mem_write(&mut self, addr: u16, data: u8) {
-        self.state_mut().addr.update(data);
+    // fn mem_write(&mut self, addr: u16, data: u8) {
+    //     self.state_mut().addr.update(data);
+    // }
+
+    fn write_to_ctrl(&mut self, data: u8) {
+        let before_nmi_status = self.state_mut().ctrl.generate_vblank_nmi();
+        self.state_mut().ctrl.update(data);
+        if !before_nmi_status
+            && self.state_mut().ctrl.generate_vblank_nmi()
+            && self.state().status.is_in_vblank()
+        {
+            self.state_mut().nmi_interrupt = Some(1);
+        }
+    }
+
+    fn increment_vram_addr(&mut self) {
+        let addr_increment = self.state().ctrl.vram_addr_increment();
+        self.state_mut().addr.increment(addr_increment);
     }
 
     fn mem_read(&mut self, addr: u16) -> u8 {
@@ -75,6 +91,102 @@ pub trait Interface: Sized + Context {
         }
 
         return false;
+    }
+
+    fn write_to_mask(&mut self, value: u8) {
+        self.state_mut().mask.update(value);
+    }
+
+    fn read_status(&mut self) -> u8 {
+        let data = self.state().status.snapshot();
+        self.state_mut().status.reset_vblank_status();
+        self.state_mut().addr.reset_latch();
+        self.state_mut().scroll.reset_latch();
+        data
+    }
+
+    fn write_to_oam_addr(&mut self, value: u8) {
+        self.state_mut().oam_addr = value;
+    }
+
+    fn write_to_oam_data(&mut self, value: u8) {
+        let oam_addr = self.state().oam_addr;
+        self.state_mut().oam_data[oam_addr as usize] = value;
+        self.state_mut().oam_addr = oam_addr.wrapping_add(1);
+    }
+
+    fn read_oam_data(&self) -> u8 {
+        let oam_addr = self.state().oam_addr;
+        self.state().oam_data[oam_addr as usize]
+    }
+
+    fn write_to_scroll(&mut self, value: u8) {
+        self.state_mut().scroll.write(value);
+    }
+
+    fn write_to_ppu_addr(&mut self, value: u8) {
+        self.state_mut().addr.update(value);
+    }
+
+    fn mem_write(&mut self, addr: u16, data: u8) {
+        let addr = self.state().addr.get();
+        match addr {
+            0..=0x1fff => println!("attempt to write to chr rom space {}", addr),
+            0x2000..=0x2fff => {
+                let mirror_vram_addr = self.mirror_vram_addr(addr);
+                self.state_mut().vram[mirror_vram_addr as usize] = data;
+            }
+            0x3000..=0x3eff => unimplemented!("addr {} shouldn't be used in reallity", addr),
+
+            //Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+                let add_mirror = addr - 0x10;
+                self.state_mut().palette_table[(add_mirror - 0x3f00) as usize] = data;
+            }
+            0x3f00..=0x3fff => {
+                self.state_mut().palette_table[(addr - 0x3f00) as usize] = data;
+            }
+            _ => panic!("unexpected access to mirrored space {}", addr),
+        }
+        self.increment_vram_addr();
+    }
+
+    fn read_data(&mut self) -> u8 {
+        let addr = self.state().addr.get();
+
+        self.increment_vram_addr();
+
+        match addr {
+            0..=0x1fff => {
+                let result = self.state().internal_data_buf;
+                self.state_mut().internal_data_buf = self.state().chr_rom[addr as usize];
+                result
+            }
+            0x2000..=0x2fff => {
+                let result = self.state().internal_data_buf;
+                self.state_mut().internal_data_buf =
+                    self.state().vram[self.mirror_vram_addr(addr) as usize];
+                result
+            }
+            0x3000..=0x3eff => unimplemented!("addr {} shouldn't be used in reallity", addr),
+
+            //Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
+            0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+                let add_mirror = addr - 0x10;
+                self.state_mut().palette_table[(add_mirror - 0x3f00) as usize]
+            }
+
+            0x3f00..=0x3fff => self.state().palette_table[(addr - 0x3f00) as usize],
+            _ => panic!("unexpected access to mirrored space {}", addr),
+        }
+    }
+
+    fn write_oam_dma(&mut self, data: &[u8; 256]) {
+        for x in data.iter() {
+            let oarm_addr = self.state().oam_addr;
+            self.state_mut().oam_data[oarm_addr as usize] = *x;
+            self.state_mut().oam_addr = self.state().oam_addr.wrapping_add(1);
+        }
     }
 }
 
@@ -139,18 +251,6 @@ impl PPU {
         }
     }
 
-    fn write_to_ctrl(&mut self, data: u8) {
-        let before_nmi_status = self.ctrl.generate_vblank_nmi();
-        self.ctrl.update(data);
-        if !before_nmi_status && self.ctrl.generate_vblank_nmi() && self.status.is_in_vblank() {
-            self.nmi_interrupt = Some(1);
-        }
-    }
-
-    fn increment_vram_addr(&mut self) {
-        self.addr.increment(self.ctrl.vram_addr_increment());
-    }
-
     // https://wiki.nesdev.org/w/index.php/Mirroring
     // Horizontal:
     //   [ A ] [ a ]
@@ -175,10 +275,6 @@ impl PPU {
 }
 
 trait Private: Sized + Context {
-    fn write_to_ctrl(&mut self, data: u8) {
-        self.state_mut().ctrl.update(data);
-    }
-
     fn increment_vram_addr(&mut self) {
         let vram_address = self.state_mut().ctrl.vram_addr_increment();
         self.state_mut().addr.increment(vram_address);
@@ -309,6 +405,48 @@ impl ControlRegister {
 
     fn generate_vblank_nmi(&mut self) -> bool {
         return self.contains(ControlRegister::GENERATE_NMI);
+    }
+
+    pub fn nametable_addr(&self) -> u16 {
+        match self.bits & 0b11 {
+            0 => 0x2000,
+            1 => 0x2400,
+            2 => 0x2800,
+            3 => 0x2c00,
+            _ => panic!("not possible"),
+        }
+    }
+
+    pub fn sprt_pattern_addr(&self) -> u16 {
+        if !self.contains(ControlRegister::SPRITE_PATTERN_ADDR) {
+            0
+        } else {
+            0x1000
+        }
+    }
+
+    pub fn bknd_pattern_addr(&self) -> u16 {
+        if !self.contains(ControlRegister::BACKROUND_PATTERN_ADDR) {
+            0
+        } else {
+            0x1000
+        }
+    }
+
+    pub fn sprite_size(&self) -> u8 {
+        if !self.contains(ControlRegister::SPRITE_SIZE) {
+            8
+        } else {
+            16
+        }
+    }
+
+    pub fn master_slave_select(&self) -> u8 {
+        if !self.contains(ControlRegister::SPRITE_SIZE) {
+            0
+        } else {
+            1
+        }
     }
 }
 
