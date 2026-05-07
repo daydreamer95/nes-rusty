@@ -549,11 +549,12 @@ trait Private: Context + Sized {
     }
 
     fn set_interrupt_disable(&mut self) {
-        self.state_mut().flags |= 0b0010_0000;
+        self.state_mut().flags |= 0b0000_0100;
     }
 
     fn clear_interrupt_disable(&mut self) {
-        self.state_mut().flags &= 0b1101_0000;
+        self.state_mut().flags &= 0b1111_1011;
+        // self.state_mut().flags &= 0b1111_1011;
     }
 
     // Stack operator
@@ -785,13 +786,14 @@ trait Private: Context + Sized {
             self.clear_zero_flag();
         }
 
-        if result & 0b1000_0000 > 0 {
-            self.state_mut().flags |= 0b1000_0000;
-        }
-
-        if result & 0b0100_0000 > 0 {
-            self.state_mut().flags |= 0b0100_0000;
-        }
+        // if param & 0b1000_0000 > 0 {
+        //     self.state_mut().flags |= 0b1000_0000;
+        // }
+        //
+        // if param & 0b0100_0000 > 0 {
+        //     self.state_mut().flags |= 0b0100_0000;
+        // }
+        self.state_mut().flags = (self.state().flags & 0b0011_1111) | (param & 0b1100_0000)
     }
     // BMI Branch if Minus
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
@@ -855,7 +857,7 @@ trait Private: Context + Sized {
     //bvc - Branch if Overflow Clear
     fn bvc(&mut self, addressing_mode: &AddressingMode) {
         // if overflow clear
-        if self.state().flags & 0b0000_0000 == 0 {
+        if self.state().flags & 0b0100_0000 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
