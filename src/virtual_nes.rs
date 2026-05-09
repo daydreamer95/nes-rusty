@@ -140,7 +140,8 @@ pub trait Private: Sized + Context {
             }
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU read");
-                ppu::Interface::mem_read(self.newtype_mut(), addr)
+                let mirror_down_addr = addr & 0b00100000_00000111;
+                ppu::Interface::mem_read(self.newtype_mut(), mirror_down_addr)
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // return 0;
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
@@ -181,6 +182,7 @@ pub trait Private: Sized + Context {
                 ppu::Interface::write_to_ppu_addr(self.newtype_mut(), data);
             }
             0x2007 => {
+                println!("PPU VRAM write: data={:02X}, to PPU addr register", data);
                 ppu::Interface::write_to_oam_data(self.newtype_mut(), data);
             }
             0x4000..=0x4013 | 0x4015 => {
@@ -211,7 +213,8 @@ pub trait Private: Sized + Context {
             }
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU write");
-                ppu::Interface::mem_write(self.newtype_mut(), addr, data);
+                let _mirror_down_addr = addr & 0b00100000_00000111;
+                ppu::Interface::mem_write(self.newtype_mut(), _mirror_down_addr, data);
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
                 // self.state_mut()

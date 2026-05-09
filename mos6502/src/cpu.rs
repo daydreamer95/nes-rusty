@@ -129,6 +129,7 @@ pub trait Interface: Sized + Context {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
+            println!("cycle : {}", self.state().cycles);
             if let Some(_nmi) = poll_nmi_interrupt(self) {
                 println!("interrupt_nmi");
                 self.interrupt_nmi();
@@ -786,14 +787,14 @@ trait Private: Context + Sized {
             self.clear_zero_flag();
         }
 
-        // if param & 0b1000_0000 > 0 {
-        //     self.state_mut().flags |= 0b1000_0000;
-        // }
-        //
-        // if param & 0b0100_0000 > 0 {
-        //     self.state_mut().flags |= 0b0100_0000;
-        // }
-        self.state_mut().flags = (self.state().flags & 0b0011_1111) | (param & 0b1100_0000)
+        if param & 0b1000_0000 > 0 {
+            self.state_mut().flags |= 0b1000_0000;
+        }
+
+        if param & 0b0100_0000 > 0 {
+            self.state_mut().flags |= 0b0100_0000;
+        }
+        // self.state_mut().flags = (self.state().flags & 0b0011_1111) | (param & 0b1100_0000)
     }
     // BMI Branch if Minus
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
@@ -824,7 +825,7 @@ trait Private: Context + Sized {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
-            let step = param + 1;
+            let step = param;
             self.add_relative_displacement_to_program_counter(step);
         }
     }

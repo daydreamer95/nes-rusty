@@ -73,7 +73,7 @@ fn main() {
 
     // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
-        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/Alter_Ego.nes".to_string());
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/BombSweeper.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
 
