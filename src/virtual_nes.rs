@@ -106,6 +106,12 @@ trait Context: Sized {
         self.mem_write(addr, lsb);
         self.mem_write(addr + 1, hsb);
     }
+
+    fn tick(&mut self, cycles: u8) {
+        // self.state_mut().cycles += cycles as usize;
+        cpu::Context::tick(self.newtype_mut(), cycles);
+        ppu::Interface::tick(self.newtype_mut(), cycles * 3);
+    }
 }
 
 impl<T: Context> Private for T {}
@@ -141,7 +147,8 @@ pub trait Private: Sized + Context {
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU read");
                 let mirror_down_addr = addr & 0b00100000_00000111;
-                ppu::Interface::mem_read(self.newtype_mut(), mirror_down_addr)
+                Private::mem_read(self, mirror_down_addr)
+                // ppu::Interface::mem_read(self.newtype_mut(), mirror_down_addr)
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // return 0;
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
@@ -182,8 +189,7 @@ pub trait Private: Sized + Context {
                 ppu::Interface::write_to_ppu_addr(self.newtype_mut(), data);
             }
             0x2007 => {
-                println!("PPU VRAM write: data={:02X}, to PPU addr register", data);
-                ppu::Interface::write_to_oam_data(self.newtype_mut(), data);
+                ppu::Interface::mem_write(self.newtype_mut(), addr, data);
             }
             0x4000..=0x4013 | 0x4015 => {
                 //ignore APU
@@ -209,12 +215,13 @@ pub trait Private: Sized + Context {
 
                 // todo: handle this eventually
                 // let add_cycles: u16 = if self.cycles % 2 == 1 { 514 } else { 513 };
-                // self.tick(add_cycles); //todo this will cause weird effects as PPU will have 513/514 * 3 ticks
+                // self.tuck(add_cycles); //todo this will cause weird effects as PPU will have 513/514 * 3 ticks
             }
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU write");
                 let _mirror_down_addr = addr & 0b00100000_00000111;
-                ppu::Interface::mem_write(self.newtype_mut(), _mirror_down_addr, data);
+                Private::mem_write(self, _mirror_down_addr, data);
+                // ppu::Interface::mem_write(self.newtype_mut(), _mirror_down_addr, data);
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
                 // self.state_mut()
@@ -232,10 +239,11 @@ pub trait Private: Sized + Context {
         }
     }
 
-    fn tick(&mut self, cycles: u8) {
-        // self.state_mut().cycles += cycles as usize;
-        ppu::Interface::tick(self.newtype_mut(), cycles * 3);
-    }
+    // fn tick(&mut self, cycles: u8) {
+    //     // self.state_mut().cycles += cycles as usize;
+    //     // cpu::Context::tick(self.newtype_mut(), cycles);
+    //     ppu::Interface::tick(self.newtype_mut(), cycles * 3);
+    // }
 }
 
 pub trait Interface: Sized + Context {
@@ -263,6 +271,9 @@ pub trait Interface: Sized + Context {
                 callback(orphan.as_mut().state_mut());
             },
             move |orphan| ppu::Interface::poll_nmi_interrupt(orphan.as_mut().newtype_mut()),
+            |orphan, cycles| {
+                orphan.as_mut().tick(cycles)
+            },
         );
     }
 

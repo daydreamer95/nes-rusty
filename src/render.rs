@@ -163,16 +163,22 @@ pub fn show_tile_bank(chr_rom: &Vec<u8>, bank: usize) -> Frame {
 pub fn render(ppu: &PPU, frame: &mut Frame) {
     let bank = ppu.ctrl.bknd_pattern_addr();
 
+    // println!("ppu vram {:?}", ppu.vram);
     for i in 0..0x03c0 {
         let tile = ppu.vram[i] as u16;
+        // println!("tile_x {:?}", tile,);
         let tile_x = i % 32;
         let tile_y = i / 32;
         let tile = &ppu.chr_rom[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
 
+        // println!("chr_rom: {:?}", &ppu.chr_rom);
+        // println!(
+        //     "bank {:?} tile_x {:?} tile_y {:?} tile {:?}",
+        //     bank, tile_x, tile_y, tile
+        // );
         for y in 0..=7 {
             let mut upper = tile[y];
             let mut lower = tile[y + 8];
-
             for x in (0..=7).rev() {
                 let value = (1 & upper) << 1 | (1 & lower);
                 upper = upper >> 1;

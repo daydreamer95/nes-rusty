@@ -52,14 +52,14 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("Untitle", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
+        .window("Untitle", (256.0 * 3.0) as u32, (240.0 * 3.0) as u32)
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
-    canvas.set_scale(10.0, 10.0).unwrap();
+    canvas.set_scale(3.0, 3.0).unwrap();
     //...
 
     //...
@@ -73,7 +73,7 @@ fn main() {
 
     // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
-        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/BombSweeper.nes".to_string());
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/pacmac.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
 

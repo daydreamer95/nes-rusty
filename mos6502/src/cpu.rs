@@ -5,7 +5,7 @@ use std::collections::HashMap;
 const MEMORY_SIZE: u16 = 0xFFFF;
 const PROGRAM_ROM_MEMORY_ADDRESS_START: u16 = 0x0600;
 const RESET_INTERRUPT_ADDR: u16 = 0xFFFC;
-const STACK_STARTING_POINTER: u8 = 0xFF;
+const STACK_STARTING_POINTER: u8 = 0xFD;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AddressingMode {
@@ -106,10 +106,12 @@ pub trait Context: Sized {
         self.insert_address_into_stack();
 
         let mut current_state_flag = self.state().flags;
-        current_state_flag |= 0b0010_0000; // set break flag
-        current_state_flag |= 0b0010_0000; // set break flag
-        //
-        //
+        if 0b00100000 & 0b0010_0000 == 1 {
+            current_state_flag |= 0b0010_0000; // set break flag
+        }
+        if 0b00100000 & 0b100000 == 1 {
+            current_state_flag |= 0b0100_0000; // set break flag
+        }
         self.mem_write(self.get_address_from_stack(), current_state_flag);
         self.insert_address_into_stack();
 
@@ -123,15 +125,17 @@ pub trait Interface: Sized + Context {
         &mut self,
         mut callback: F,
         poll_nmi_interrupt: fn(&mut Self) -> Option<u8>,
+        tick_callback: fn(&mut Self, u8), //
     ) where
         F: FnMut(&mut Self),
     {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
-            println!("cycle : {}", self.state().cycles);
+            // println!("cycle : {}", self.state().cycles);
+            // println!("interrupt_nmi : {:#?}", poll_nmi_interrupt(self).take());
             if let Some(_nmi) = poll_nmi_interrupt(self) {
-                println!("interrupt_nmi");
+                // println!("interrupt_nmi");
                 self.interrupt_nmi();
             }
 
@@ -258,7 +262,7 @@ pub trait Interface: Sized + Context {
                 _ => return,
             }
 
-            self.tick(current_opcode._cycles);
+            tick_callback(self, current_opcode._cycles);
             if current_program_counter_state == self.state().program_counter {
                 //the addressing mode is a property of an instruction that defines how the CPU should interpret the next 1 or 2 bytes in the instruction stream.
                 //Different addressing modes have different instruction sizes
@@ -825,7 +829,7 @@ trait Private: Context + Sized {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
-            let step = param;
+            let step = param + 1;
             self.add_relative_displacement_to_program_counter(step);
         }
     }
@@ -849,6 +853,7 @@ trait Private: Context + Sized {
         //self.memory[self.insert_address_into_stack() as usize] = self.flags;
         let flag = self.insert_address_into_stack();
         self.mem_write(flag, self.state().flags);
+        self.set_interrupt_disable();
         // set IRQ interupt vector
         self.state_mut().program_counter = self.mem_read_u16(RESET_INTERRUPT_ADDR);
         // set break flag to 1
