@@ -88,10 +88,12 @@ pub trait Interface: Sized + Context {
             }
 
             if self.state().scanline >= 262 {
+                println!("trigger nmi");
                 self.state_mut().scanline = 0;
-                self.state_mut().nmi_interrupt = Some(0);
+                self.state_mut().nmi_interrupt = None;
                 self.state_mut().status.set_sprite_zero_hit(true);
                 self.state_mut().status.reset_vblank_status();
+                self.state_mut().frame_completed = true;
                 return true;
             }
         }
@@ -230,6 +232,9 @@ pub struct PPU {
     scanline: u16,
     pub nmi_interrupt: Option<u8>,
 
+    //
+    pub frame_completed: bool,
+
     //Registers: Used by CPU for communication
     pub ctrl: ControlRegister,
     pub mask: MaskRegister,
@@ -264,6 +269,7 @@ impl PPU {
             cycles: 0,
             scanline: 0,
             nmi_interrupt: None,
+            frame_completed: true,
         }
     }
 

@@ -114,6 +114,11 @@ fn main() {
 
     let mut frame = Frame::new();
     virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
+        if !emulator.ppu_state.frame_completed {
+            return;
+        }
+
+        emulator.ppu_state.frame_completed = false;
         render::render(&mut emulator.ppu_state, &mut frame);
         texture.update(None, &frame.data, 256 * 3).unwrap();
 

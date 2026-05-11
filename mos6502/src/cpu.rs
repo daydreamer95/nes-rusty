@@ -100,9 +100,9 @@ pub trait Context: Sized {
         let mut pc = self.state().program_counter;
         let lsb = (pc & 0xFF) as u8;
         let hsb = (pc >> 8) as u8;
-        self.mem_write(self.get_address_from_stack(), lsb);
-        self.insert_address_into_stack();
         self.mem_write(self.get_address_from_stack(), hsb);
+        self.insert_address_into_stack();
+        self.mem_write(self.get_address_from_stack(), lsb);
         self.insert_address_into_stack();
 
         let mut current_state_flag = self.state().flags;
@@ -1066,15 +1066,15 @@ trait Private: Context + Sized {
 
     fn pla(&mut self) {
         let data_from_stack = self.pop_address_from_stack();
-        let data_converted_8bit = (data_from_stack) as u8;
-        self.state_mut().accumulator = data_converted_8bit;
-        self.update_negative_and_zero_flags(data_converted_8bit);
+        let value = self.mem_read(data_from_stack);
+        self.state_mut().accumulator = value;
+        self.update_negative_and_zero_flags(value);
     }
     fn plp(&mut self) {
         let data_from_stack = self.pop_address_from_stack();
-        let data_converted_8bit = (data_from_stack) as u8;
-        self.state_mut().flags = data_converted_8bit;
-        self.update_negative_and_zero_flags(data_converted_8bit);
+        let value = self.mem_read(data_from_stack);
+        self.state_mut().flags = value;
+        self.update_negative_and_zero_flags(value);
     }
 
     fn rol(&mut self, addressing_mode: &AddressingMode) {
@@ -1135,19 +1135,25 @@ trait Private: Context + Sized {
     }
 
     fn rti(&mut self) {
-        let stack_addr = self.pop_address_from_stack_u8();
-        self.state_mut().flags = stack_addr;
-        self.state_mut().program_counter = self.pop_address_from_stack();
+        let stack_addr = self.pop_address_from_stack();
+        self.state_mut().flags = self.mem_read(stack_addr);
+
+        let pcl_addr = self.pop_address_from_stack();
+        let pcl = self.mem_read(pcl_addr) as u16;
+        let pch_addr = self.pop_address_from_stack();
+        let pch = self.mem_read(pch_addr) as u16;
+
+        self.state_mut().program_counter = (pch << 8) | pcl;
     }
 
     fn rts(&mut self) {
         let p1_address = self.pop_address_from_stack();
-        let lsb = self.mem_read_u16(p1_address);
+        let lsb = self.mem_read(p1_address) as u16;
 
         let p2_address = self.pop_address_from_stack();
-        let hsb = self.mem_read_u16(p2_address);
+        let hsb = self.mem_read(p2_address) as u16;
 
-        let new_program_counter = (hsb as u16) << 8 | (lsb as u16);
+        let new_program_counter = (hsb << 8) | (lsb);
         self.state_mut().program_counter = new_program_counter + 1;
     }
 

@@ -211,7 +211,7 @@ pub trait Private: Sized + Context {
                     buffer[i as usize] = Private::mem_read(self, hi + i);
                 }
 
-                // ppu::Interface::write_to_oam_data(self.newtype_mut(), &buffer);
+                ppu::Interface::write_oam_dma(self.newtype_mut(), &buffer);
 
                 // todo: handle this eventually
                 // let add_cycles: u16 = if self.cycles % 2 == 1 { 514 } else { 513 };
@@ -271,9 +271,7 @@ pub trait Interface: Sized + Context {
                 callback(orphan.as_mut().state_mut());
             },
             move |orphan| ppu::Interface::poll_nmi_interrupt(orphan.as_mut().newtype_mut()),
-            |orphan, cycles| {
-                orphan.as_mut().tick(cycles)
-            },
+            |orphan, cycles| orphan.as_mut().tick(cycles),
         );
     }
 
