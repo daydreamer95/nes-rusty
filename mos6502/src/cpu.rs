@@ -803,7 +803,7 @@ trait Private: Context + Sized {
     // BMI Branch if Minus
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
         // If negative flag is set
-        if self.state().flags & 0b1000_0000 == 255 {
+        if self.state().flags & 0b1000_0000 != 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
@@ -875,7 +875,7 @@ trait Private: Context + Sized {
     //bvs - Branch if Overflow Set
     fn bvs(&mut self, addressing_mode: &AddressingMode) {
         // if overflow is set
-        if self.state().flags & 0b0100_0000 == 0b0100_0000 {
+        if self.state().flags & 0b0100_0000 != 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
 
@@ -1279,7 +1279,7 @@ trait Private: Context + Sized {
     }
     fn tay(&mut self) {
         self.state_mut().register_y = self.state().accumulator;
-        self.update_negative_and_zero_flags(self.state().register_x);
+        self.update_negative_and_zero_flags(self.state().register_y);
     }
     fn txs(&mut self) {
         self.state_mut().stack_pointer = self.state().register_x;
