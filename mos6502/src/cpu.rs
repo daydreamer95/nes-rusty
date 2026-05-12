@@ -568,6 +568,28 @@ trait Private: Context + Sized {
         u16::from_str_radix(&absolute_stack_pointer, 16).unwrap()
     }
 
+    fn add_to_accumulator(&mut self, data: u8) {
+        let accumulator = self.state().accumulator;
+        let carry = self.state().flags & 0b0000_0001;
+        let sum = accumulator as u16 + data as u16 + carry as u16;
+        let result = sum as u8;
+
+        if sum > 0xff {
+            self.set_carry_flag();
+        } else {
+            self.clear_carry_flag();
+        }
+
+        if (data ^ result) & (data ^ accumulator) & 0x88 != 0 {
+            self.set_overflow_flag();
+        } else {
+            self.set_overflow_flag();
+        }
+
+        self.state_mut().accumulator = result;
+        self.update_negative_and_zero_flags(result);
+    }
+
     // Notice one thing the 6502 stack address is starting from top to down.
     // For EG: if we got 2 value added to the stack, first one gonna be inserted
     // at $01FF and second one at $01FE so we add we actually decrement the address pointer by 1
@@ -632,32 +654,38 @@ trait Private: Context + Sized {
     //add_relative_displacement_to_program_counter because of little endianess of cpu 6502.
     // we must manually do add/sub on program counter.
     fn add_relative_displacement_to_program_counter(&mut self, step: u8) {
-        let mut lsb_program_counter = (self.state().program_counter & 0xFF) as u8;
-        let mut msb_program_counter = (self.state().program_counter >> 8) as u8;
-
-        let step_as_i8 = step as i8;
-        let step_as_i8_mult_minus_one = -step_as_i8;
-        let positive = step_as_i8.signum() == 1;
-
-        if positive {
-            let wrap = lsb_program_counter.checked_add(step);
-            lsb_program_counter = lsb_program_counter.wrapping_add(step);
-            match wrap {
-                Some(_) => (),
-                None => msb_program_counter = msb_program_counter.wrapping_add(1),
-            }
-        } else {
-            let wrap = lsb_program_counter.checked_sub(step_as_i8_mult_minus_one as u8);
-            lsb_program_counter = lsb_program_counter.wrapping_sub(step_as_i8_mult_minus_one as u8);
-
-            match wrap {
-                Some(_) => (),
-                None => msb_program_counter = msb_program_counter.wrapping_sub(1),
-            }
-        }
-
-        self.state_mut().program_counter =
-            (msb_program_counter as u16) << 8 | (lsb_program_counter as u16);
+        // let mut lsb_program_counter = (self.state().program_counter & 0xFF) as u8;
+        // let mut msb_program_counter = (self.state().program_counter >> 8) as u8;
+        //
+        // let step_as_i8 = step as i8;
+        // let step_as_i8_mult_minus_one = -step_as_i8;
+        // let positive = step_as_i8.signum() == 1;
+        //
+        // if positive {
+        //     let wrap = lsb_program_counter.checked_add(step);
+        //     lsb_program_counter = lsb_program_counter.wrapping_add(step);
+        //     match wrap {
+        //         Some(_) => (),
+        //         None => msb_program_counter = msb_program_counter.wrapping_add(1),
+        //     }
+        // } else {
+        //     let wrap = lsb_program_counter.checked_sub(step_as_i8_mult_minus_one as u8);
+        //     lsb_program_counter = lsb_program_counter.wrapping_sub(step_as_i8_mult_minus_one as u8);
+        //
+        //     match wrap {
+        //         Some(_) => (),
+        //         None => msb_program_counter = msb_program_counter.wrapping_sub(1),
+        //     }
+        // }
+        //
+        // self.state_mut().program_counter =
+        //     (msb_program_counter as u16) << 8 | (lsb_program_counter as u16);
+        //
+        let offset = step as i8 as i32;
+        let new_pc = (self.state().program_counter as i32)
+            .wrapping_add(offset)
+            .wrapping_add(1);
+        self.state_mut().program_counter = (new_pc & 0xfffff) as u16;
     }
 
     // lda https://www.nesdev.org/obelisk-6502-guide/reference.html#LDA
@@ -675,16 +703,17 @@ trait Private: Context + Sized {
     fn adc(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
         let param = self.mem_read(operand_addr);
-
-        let old_accumulator = self.state().accumulator;
-
-        self.state_mut().accumulator = self.state().accumulator.wrapping_add(param);
-
-        self.update_negative_and_zero_flags(self.state().accumulator);
-        self.update_carry_and_overflow_flag(
-            old_accumulator.checked_add(param),
-            MathematicalOperation::Add,
-        );
+        self.add_to_accumulator(param);
+        //
+        // let old_accumulator = self.state().accumulator;
+        //
+        // self.state_mut().accumulator = self.state().accumulator.wrapping_add(param);
+        //
+        // self.update_negative_and_zero_flags(self.state().accumulator);
+        // self.update_carry_and_overflow_flag(
+        //     old_accumulator.checked_add(param),
+        //     MathematicalOperation::Add,
+        // );
     }
 
     // and https://www.nesdev.org/obelisk-6502-guide/reference.html#AND
@@ -739,43 +768,31 @@ trait Private: Context + Sized {
     // bcc - Branch if Carry Clear
     // https://www.nesdev.org/obelisk-6502-guide/reference.html#BCC
     fn bcc(&mut self, addressing_mode: &AddressingMode) {
-        let operand_addr = self.get_operand_addr(addressing_mode);
-        let param = self.mem_read(operand_addr);
-
-        let step = param + 1;
-
         // if carry flag is not set
         if self.state().flags & 0b0000_0001 == 0 {
-            self.add_relative_displacement_to_program_counter(step);
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            let param = self.mem_read(operand_addr);
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
 
     // bcs Branch if Carry set
     fn bcs(&mut self, addressing_mode: &AddressingMode) {
-        let operand_addr = self.get_operand_addr(addressing_mode);
-        let param = self.mem_read(operand_addr);
-
-        let step = param + 1;
-        println!(
-            "HUYDEBUG. flags {:#?} and self.flags & 0000_0001 = {:#?}",
-            self.state().flags,
-            self.state().flags & 0b000_0001
-        );
         // if carry flag is set
         if self.state().flags & 0b0000_0001 == 1 {
-            self.add_relative_displacement_to_program_counter(step);
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            let param = self.mem_read(operand_addr);
+
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
     // beq Branch if Equal
     fn beq(&mut self, addressing_mode: &AddressingMode) {
-        let operand_addr = self.get_operand_addr(addressing_mode);
-        let param = self.mem_read(operand_addr);
-
-        let step = param + 1;
-
         if self.state().flags & 0b0000_0010 == 2 {
             // Zero flags is set
-            self.add_relative_displacement_to_program_counter(step);
+            let operand_addr = self.get_operand_addr(addressing_mode);
+            let param = self.mem_read(operand_addr);
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
     // bit test
@@ -817,9 +834,7 @@ trait Private: Context + Sized {
         if self.state().flags & 0b0000_0010 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
-
-            let step = param + 1;
-            self.add_relative_displacement_to_program_counter(step);
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
     // BPL Branch if Positive
@@ -828,9 +843,7 @@ trait Private: Context + Sized {
         if self.state().flags & 0b1000_0000 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
-
-            let step = param + 1;
-            self.add_relative_displacement_to_program_counter(step);
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
 
@@ -866,9 +879,7 @@ trait Private: Context + Sized {
         if self.state().flags & 0b0100_0000 == 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
-
-            let jump_addr = self.state().program_counter.wrapping_add(param as u16);
-            self.state_mut().program_counter = jump_addr
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
 
@@ -878,9 +889,7 @@ trait Private: Context + Sized {
         if self.state().flags & 0b0100_0000 != 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
-
-            let jump_addr = self.state().program_counter.wrapping_add(param as u16);
-            self.state_mut().program_counter = jump_addr
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
     //CLC - Clear Carry Flag
@@ -1227,15 +1236,15 @@ trait Private: Context + Sized {
     fn sbc(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
         let param = self.mem_read(operand_addr);
-
-        let old_accumulator = self.state().accumulator;
-
-        self.state_mut().accumulator = self.state().accumulator.wrapping_sub(param);
-        self.update_negative_and_zero_flags(self.state().accumulator);
-        self.update_carry_and_overflow_flag(
-            old_accumulator.checked_sub(param),
-            MathematicalOperation::Sub,
-        );
+        self.add_to_accumulator(param);
+        // let old_accumulator = self.state().accumulator;
+        //
+        // self.state_mut().accumulator = self.state().accumulator.wrapping_sub(param);
+        // self.update_negative_and_zero_flags(self.state().accumulator);
+        // self.update_carry_and_overflow_flag(
+        //     old_accumulator.checked_sub(param),
+        //     MathematicalOperation::Sub,
+        // );
     }
 
     //SEC - Set Carry Flag
