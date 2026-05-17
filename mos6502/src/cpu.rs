@@ -5,6 +5,7 @@ use std::collections::HashMap;
 const MEMORY_SIZE: u16 = 0xFFFF;
 const PROGRAM_ROM_MEMORY_ADDRESS_START: u16 = 0x0600;
 const RESET_INTERRUPT_ADDR: u16 = 0xFFFC;
+const IRQ_BRK_VETOR: u16 = 0xFFFE;
 const STACK_STARTING_POINTER: u8 = 0xFD;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -115,6 +116,7 @@ pub trait Context: Sized {
         self.mem_write(self.get_address_from_stack(), current_state_flag);
         self.insert_address_into_stack();
 
+        self.set_interrupt_disable();
         self.tick(2);
         self.state_mut().program_counter = self.mem_read_u16(0xfffA);
     }
@@ -583,7 +585,7 @@ trait Private: Context + Sized {
         if (data ^ result) & (data ^ accumulator) & 0x88 != 0 {
             self.set_overflow_flag();
         } else {
-            self.set_overflow_flag();
+            self.clear_overflow_flag();
         }
 
         self.state_mut().accumulator = result;
@@ -823,9 +825,7 @@ trait Private: Context + Sized {
         if self.state().flags & 0b1000_0000 != 0 {
             let operand_addr = self.get_operand_addr(addressing_mode);
             let param = self.mem_read(operand_addr);
-
-            let step = param + 1;
-            self.add_relative_displacement_to_program_counter(step);
+            self.add_relative_displacement_to_program_counter(param);
         }
     }
 
@@ -865,10 +865,10 @@ trait Private: Context + Sized {
         // update CPU status flags into the stack
         //self.memory[self.insert_address_into_stack() as usize] = self.flags;
         let flag = self.insert_address_into_stack();
-        self.mem_write(flag, self.state().flags);
+        self.mem_write(flag, self.state().flags | 0x30);
         self.set_interrupt_disable();
         // set IRQ interupt vector
-        self.state_mut().program_counter = self.mem_read_u16(RESET_INTERRUPT_ADDR);
+        self.state_mut().program_counter = self.mem_read_u16(IRQ_BRK_VETOR);
         // set break flag to 1
         self.set_break_flag();
     }
@@ -981,7 +981,8 @@ trait Private: Context + Sized {
         let addr = self.get_operand_addr(addressing_mode);
         let data = self.mem_read(addr);
 
-        self.state_mut().accumulator = self.state().accumulator ^ data
+        self.state_mut().accumulator = self.state().accumulator ^ data;
+        self.update_negative_and_zero_flags(self.state().accumulator);
     }
 
     //INC - Increment Memory
@@ -1087,10 +1088,7 @@ trait Private: Context + Sized {
     }
 
     fn rol(&mut self, addressing_mode: &AddressingMode) {
-        let carry = format!("{:08b}", self.state().flags)
-            .chars()
-            .collect::<Vec<char>>()[7];
-
+        let carry = self.state().flags & 1;
         let old_param: u8;
         let result: u8;
         if *addressing_mode == AddressingMode::Accumulator {
@@ -1115,10 +1113,7 @@ trait Private: Context + Sized {
     }
 
     fn ror(&mut self, addressing_mode: &AddressingMode) {
-        let carry = format!("{:08b}", self.state().flags)
-            .chars()
-            .collect::<Vec<char>>()[7];
-
+        let carry = self.state().flags & 1;
         let old_param: u8;
         let result: u8;
         //Bit 7 is filled with the current value of the carry flag
@@ -1236,7 +1231,7 @@ trait Private: Context + Sized {
     fn sbc(&mut self, addressing_mode: &AddressingMode) {
         let operand_addr = self.get_operand_addr(addressing_mode);
         let param = self.mem_read(operand_addr);
-        self.add_to_accumulator(param);
+        self.add_to_accumulator(!param);
         // let old_accumulator = self.state().accumulator;
         //
         // self.state_mut().accumulator = self.state().accumulator.wrapping_sub(param);
