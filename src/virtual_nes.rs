@@ -1,4 +1,5 @@
 use crate::cartridge::NesRom;
+use crate::joypad::Joypad;
 use crate::opharn::Orphan;
 use crate::ppu;
 use mos6502::cpu;
@@ -10,6 +11,7 @@ pub struct Emulator {
     pub cpu_state: cpu::CPU,
     pub nes_rom: NesRom,
     pub ppu_state: ppu::PPU,
+    pub joypad1: Joypad,
 }
 
 impl Emulator {
@@ -24,7 +26,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
-            // cycles: 0,
+            joypad1: Joypad::new(),
         };
         emulator
     }
@@ -38,7 +40,7 @@ impl Emulator {
             cpu_state: cpu::CPU::new(),
             ppu_state: ppu::PPU::new(nes_rom.chr_rom.clone(), nes_rom.mirror.clone()),
             nes_rom: nes_rom.clone(),
-            // cycles: 0,
+            joypad1: Joypad::new(),
         };
         println!(
             "debug im start to write program rom with len {}",
@@ -137,7 +139,7 @@ pub trait Private: Sized + Context {
             }
             0x4016 => {
                 // ignore joypad 1;
-                0
+                self.state_mut().joypad1.read()
             }
 
             0x4017 => {
@@ -196,6 +198,7 @@ pub trait Private: Sized + Context {
             }
 
             0x4016 => {
+                self.state_mut().joypad1.write(data);
                 // ignore joypad 1;
             }
 

@@ -1,8 +1,11 @@
 pub mod cartridge;
+pub mod joypad;
 pub mod opharn;
 pub mod ppu;
 pub mod render;
 pub mod virtual_nes;
+
+use std::collections::HashMap;
 
 use rand::Rng;
 use sdl2::EventPump;
@@ -11,6 +14,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 
+use crate::joypad::Joypad;
 use crate::render::Frame;
 use crate::render::show_tile;
 use crate::render::show_tile_bank;
@@ -73,7 +77,7 @@ fn main() {
 
     // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
-        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/Alter_Ego.nes".to_string());
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/pacmac.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
 
@@ -112,6 +116,17 @@ fn main() {
     //     }
     // }
 
+    // key map
+    let mut key_map = HashMap::new();
+    key_map.insert(Keycode::S, joypad::JoypadButton::DOWN);
+    key_map.insert(Keycode::W, joypad::JoypadButton::UP);
+    key_map.insert(Keycode::A, joypad::JoypadButton::LEFT);
+    key_map.insert(Keycode::D, joypad::JoypadButton::RIGHT);
+    key_map.insert(Keycode::Return, joypad::JoypadButton::START);
+    key_map.insert(Keycode::Space, joypad::JoypadButton::SELECT);
+    key_map.insert(Keycode::J, joypad::JoypadButton::BUTTON_A);
+    key_map.insert(Keycode::K, joypad::JoypadButton::BUTTON_B);
+
     let mut frame = Frame::new();
     virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
         if !emulator.ppu_state.frame_completed {
@@ -132,6 +147,17 @@ fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => std::process::exit(0),
+                Event::KeyDown { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        emulator.joypad1.set_button_pressed_status(*key, true);
+                    }
+                }
+                Event::KeyUp { keycode, .. } => {
+                    if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
+                        emulator.joypad1.set_button_pressed_status(*key, false);
+                    }
+                }
+
                 _ => { /* do nothing */ }
             }
         }
