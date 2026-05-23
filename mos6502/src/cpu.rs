@@ -524,11 +524,13 @@ trait Private: Context + Sized {
     }
 
     fn set_break_flag(&mut self) {
-        self.state_mut().flags |= 0b0010_0000;
+        // self.state_mut().flags |= 0b0010_0000;
+        self.state_mut().flags |= 0x10;
     }
 
     fn clear_break_flag(&mut self) {
-        self.state_mut().flags &= 0b1101_1111;
+        // self.state_mut().flags &= 0b1101_1111;
+        self.state_mut().flags &= !0x10;
     }
 
     fn set_overflow_flag(&mut self) {
@@ -582,7 +584,7 @@ trait Private: Context + Sized {
             self.clear_carry_flag();
         }
 
-        if (data ^ result) & (data ^ accumulator) & 0x88 != 0 {
+        if (data ^ result) & (data ^ accumulator) & 0x80 != 0 {
             self.set_overflow_flag();
         } else {
             self.clear_overflow_flag();
@@ -810,14 +812,14 @@ trait Private: Context + Sized {
             self.clear_zero_flag();
         }
 
-        if param & 0b1000_0000 > 0 {
-            self.state_mut().flags |= 0b1000_0000;
-        }
-
-        if param & 0b0100_0000 > 0 {
-            self.state_mut().flags |= 0b0100_0000;
-        }
-        // self.state_mut().flags = (self.state().flags & 0b0011_1111) | (param & 0b1100_0000)
+        // if param & 0b1000_0000 > 0 {
+        //     self.state_mut().flags |= 0b1000_0000;
+        // }
+        //
+        // if param & 0b0100_0000 > 0 {
+        //     self.state_mut().flags |= 0b0100_0000;
+        // }
+        self.state_mut().flags = (self.state().flags & 0x3F) | (param & 0xC0)
     }
     // BMI Branch if Minus
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
@@ -850,7 +852,7 @@ trait Private: Context + Sized {
     // BRK Force Interrupt
     fn brk(&mut self) {
         // save program counter and
-        let old_program_counter = self.state().program_counter;
+        let old_program_counter = self.state().program_counter.wrapping_add(1);
         let lsb = (old_program_counter & 0xFF) as u8;
         let hsb = (old_program_counter >> 8) as u8;
 
@@ -858,10 +860,10 @@ trait Private: Context + Sized {
         //self.memory[self.insert_address_into_stack() as usize] = hsb;
 
         let s1 = self.insert_address_into_stack();
-        self.mem_write(s1, lsb);
+        self.mem_write(s1, hsb);
 
         let s2 = self.insert_address_into_stack();
-        self.mem_write(s2, hsb);
+        self.mem_write(s2, lsb);
         // update CPU status flags into the stack
         //self.memory[self.insert_address_into_stack() as usize] = self.flags;
         let flag = self.insert_address_into_stack();
@@ -1070,7 +1072,7 @@ trait Private: Context + Sized {
     //Pushes a copy of the status flags on to the stack.
     fn php(&mut self) {
         let current_flag = self.state().flags;
-        self.mem_write(self.get_address_from_stack(), current_flag);
+        self.mem_write(self.get_address_from_stack(), current_flag | 0x30);
         self.insert_address_into_stack();
     }
 
@@ -1099,7 +1101,7 @@ trait Private: Context + Sized {
             let operand_addr = self.get_operand_addr(addressing_mode);
             old_param = self.mem_read(operand_addr);
             self.mem_write(operand_addr, (old_param << 1) | carry as u8);
-            result = old_param << 1;
+            result = (old_param << 1) | carry as u8;
         }
 
         //Bit 0 is filled with the current value of the carry flag whilst the old bit 7 becomes the new carry flag value.
@@ -1119,13 +1121,13 @@ trait Private: Context + Sized {
         //Bit 7 is filled with the current value of the carry flag
         if *addressing_mode == AddressingMode::Accumulator {
             old_param = self.state().accumulator;
-            self.state_mut().accumulator = (self.state().accumulator >> 1) | ((carry as u8) << 7);
-            result = self.state().accumulator;
+            result = (self.state().accumulator >> 1) | (carry << 7);
+            self.state_mut().accumulator = result;
         } else {
             let operand_addr = self.get_operand_addr(addressing_mode);
             old_param = self.mem_read(operand_addr);
-            self.mem_write(operand_addr, (old_param >> 1) | ((carry as u8) << 7));
-            result = old_param << 1;
+            result = (old_param >> 1) | (carry << 7);
+            self.mem_write(operand_addr, result);
         }
 
         //Bit 0 is filled with the current value of the carry flag whilst the old bit 7 becomes the new carry flag value.

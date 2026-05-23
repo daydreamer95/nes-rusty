@@ -51,18 +51,19 @@ pub trait Interface: Sized + Context {
             // Name Tables ( VRAMS) or we can call screen state
             // 4 KiB of addressable space. Two "additional" screens have to be mapped to existing ones.
             // The way they are mapped depends on the mirroring type, specified by a game (iNES files have this info in the header)
-            0x2000..=0x2fff => {
+            0x2000..=0x2fff | 0x3000..=0x3eff => {
+                let addr = map_ppu_nametable_addr(addr);
                 let result = self.state().internal_data_buf;
                 self.state_mut().internal_data_buf =
                     self.state().vram[self.mirror_vram_addr(addr) as usize];
                 result
             }
             // Palettes
-            0x3000..=0x3eff => panic!(
-                "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
-                addr
-            ),
-            //0x3f00..=0x3fff => self.palette_table[(addr - 0x3f00) as usize],
+            //  => panic!(
+            //     "addr space 0x3000..0x3eff is not expected to be used, requested = {} ",
+            //     addr
+            // ),
+            0x3f00..=0x3fff => self.state().palette_table[pallette_ram_index(addr)],
             _ => panic!("unexpected access to mirrored space {}", addr),
         }
     }
@@ -80,7 +81,7 @@ pub trait Interface: Sized + Context {
 
             if self.state().scanline == 241 {
                 self.state_mut().status.set_vblank_status(true);
-                self.state_mut().status.set_sprite_zero_hit(true);
+                self.state_mut().status.set_sprite_zero_hit(false);
                 if self.state_mut().ctrl.generate_vblank_nmi() {
                     println!("ppu interrupt: {:?}", self.state().cycles);
                     self.state_mut().nmi_interrupt = Some(1);
@@ -91,7 +92,7 @@ pub trait Interface: Sized + Context {
                 println!("trigger nmi");
                 self.state_mut().scanline = 0;
                 self.state_mut().nmi_interrupt = None;
-                self.state_mut().status.set_sprite_zero_hit(true);
+                self.state_mut().status.set_sprite_zero_hit(false);
                 self.state_mut().status.reset_vblank_status();
                 self.state_mut().frame_completed = true;
                 return true;
@@ -149,18 +150,23 @@ pub trait Interface: Sized + Context {
         match addr {
             0..=0x1fff => println!("attempt to write to chr rom space {}", addr),
             0x2000..=0x2fff => {
+                let addr = map_ppu_nametable_addr(addr);
                 let mirror_vram_addr = self.mirror_vram_addr(addr);
                 self.state_mut().vram[mirror_vram_addr as usize] = data;
             }
-            0x3000..=0x3eff => unimplemented!("addr {} shouldn't be used in reallity", addr),
-
+            0x3000..=0x3eff => {
+                let addr = map_ppu_nametable_addr(addr);
+                let mirror_vram_addr = self.mirror_vram_addr(addr);
+                self.state_mut().vram[mirror_vram_addr as usize] = data;
+            }
             //Addresses $3F10/$3F14/$3F18/$3F1C are mirrors of $3F00/$3F04/$3F08/$3F0C
             0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
                 let add_mirror = addr - 0x10;
                 self.state_mut().palette_table[(add_mirror - 0x3f00) as usize] = data;
             }
             0x3f00..=0x3fff => {
-                self.state_mut().palette_table[(addr - 0x3f00) as usize] = data;
+                let idx = pallette_ram_index(addr);
+                self.state_mut().palette_table[idx] = data;
             }
             _ => panic!("unexpected access to mirrored space {}", addr),
         }
@@ -639,5 +645,23 @@ impl StatusRegister {
 
     pub fn snapshot(&self) -> u8 {
         self.bits
+    }
+}
+
+#[inline]
+fn pallette_ram_index(addr: u16) -> usize {
+    let a = ((addr.wrapping_sub(0x3f00)) & 0x1f) as usize;
+    match a {
+        0x10 | 0x14 | 0x18 | 0x1c => a - 0x10,
+        _ => a,
+    }
+}
+
+#[inline]
+fn map_ppu_nametable_addr(addr: u16) -> u16 {
+    if (0x3000..=0x3eff).contains(&addr) {
+        addr - 0x1000
+    } else {
+        addr
     }
 }
