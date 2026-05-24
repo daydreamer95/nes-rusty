@@ -97,7 +97,7 @@ pub trait Context: Sized {
         self.state_mut().cycles += cycles as usize;
     }
 
-    fn interrupt_nmi(&mut self) {
+    fn interrupt_nmi(&mut self, opscode_cycles: u8) {
         let mut pc = self.state().program_counter;
         let lsb = (pc & 0xFF) as u8;
         let hsb = (pc >> 8) as u8;
@@ -116,8 +116,8 @@ pub trait Context: Sized {
         self.mem_write(self.get_address_from_stack(), current_state_flag);
         self.insert_address_into_stack();
 
-        self.set_interrupt_disable();
-        self.tick(2);
+        // self.set_interrupt_disable();
+        self.tick(opscode_cycles);
         self.state_mut().program_counter = self.mem_read_u16(0xfffA);
     }
 }
@@ -134,31 +134,31 @@ pub trait Interface: Sized + Context {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 
         loop {
+            let code = self.mem_read(self.state().program_counter);
+            let current_opcode = all_op_codes
+                .get(&code)
+                .unwrap_or_else(|| panic!("OP code {:X} not found", code));
             // println!("cycle : {}", self.state().cycles);
             // println!("interrupt_nmi : {:#?}", poll_nmi_interrupt(self).take());
             if let Some(_nmi) = poll_nmi_interrupt(self) {
                 // println!("interrupt_nmi");
-                self.interrupt_nmi();
+                self.interrupt_nmi(current_opcode._cycles);
             }
 
             let code = self.mem_read(self.state().program_counter);
             self.state_mut().program_counter += 1;
             let current_program_counter_state = self.state().program_counter;
 
-            let current_opcode = all_op_codes
-                .get(&code)
-                .unwrap_or_else(|| panic!("OP code {:X} not found", code));
-
-            println!(
-                "Current ops code: {:X?} and program counter {:X?} and CPU flags {:08b} and RegA {:08b} RegX {:08b} RegY {:08b} StackPointer {:08b}",
-                current_opcode,
-                current_program_counter_state,
-                self.state().flags,
-                self.state().accumulator,
-                self.state().register_x,
-                self.state().register_y,
-                self.state().stack_pointer
-            );
+            // println!(
+            //     "Current ops code: {:X?} and program counter {:X?} and CPU flags {:08b} and RegA {:08b} RegX {:08b} RegY {:08b} StackPointer {:08b}",
+            //     current_opcode,
+            //     current_program_counter_state,
+            //     self.state().flags,
+            //     self.state().accumulator,
+            //     self.state().register_x,
+            //     self.state().register_y,
+            //     self.state().stack_pointer
+            // );
             match code {
                 0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
                     self.adc(&current_opcode.addressing_mode);

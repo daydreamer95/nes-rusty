@@ -13,31 +13,27 @@ pub trait Context: Sized {
 }
 
 pub trait Interface: Sized + Context {
-    // fn mem_write(&mut self, addr: u16, data: u8) {
-    //     self.state_mut().addr.update(data);
-    // }
-
     fn write_to_ctrl(&mut self, data: u8) {
-        println!("ppu write_to_ctrl");
+        // println!("ppu write_to_ctrl");
         let before_nmi_status = self.state_mut().ctrl.generate_vblank_nmi();
         self.state_mut().ctrl.update(data);
         if !before_nmi_status
             && self.state_mut().ctrl.generate_vblank_nmi()
             && self.state().status.is_in_vblank()
         {
-            println!("ppu nmi_interrupt");
+            // println!("ppu nmi_interrupt");
             self.state_mut().nmi_interrupt = Some(1);
         }
     }
 
     fn increment_vram_addr(&mut self) {
-        println!("ppu increment_vram_addr");
+        // println!("ppu increment_vram_addr");
         let addr_increment = self.state().ctrl.vram_addr_increment();
         self.state_mut().addr.increment(addr_increment);
     }
 
     fn mem_read(&mut self, addr: u16) -> u8 {
-        println!("ppu mem_read");
+        // println!("ppu mem_read");
         let addr = self.state().addr.get();
         self.increment_vram_addr();
 
@@ -83,13 +79,13 @@ pub trait Interface: Sized + Context {
                 self.state_mut().status.set_vblank_status(true);
                 self.state_mut().status.set_sprite_zero_hit(false);
                 if self.state_mut().ctrl.generate_vblank_nmi() {
-                    println!("ppu interrupt: {:?}", self.state().cycles);
+                    // println!("ppu interrupt: {:?}", self.state().cycles);
                     self.state_mut().nmi_interrupt = Some(1);
                 }
             }
 
             if self.state().scanline >= 262 {
-                println!("trigger nmi");
+                // println!("trigger nmi");
                 self.state_mut().scanline = 0;
                 self.state_mut().nmi_interrupt = None;
                 self.state_mut().status.set_sprite_zero_hit(false);
@@ -103,12 +99,12 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_to_mask(&mut self, value: u8) {
-        println!("ppu write_to_mask");
+        // println!("ppu write_to_mask");
         self.state_mut().mask.update(value);
     }
 
     fn read_status(&mut self) -> u8 {
-        println!("ppu read_status");
+        // println!("ppu read_status");
         let data = self.state().status.snapshot();
         self.state_mut().status.reset_vblank_status();
         self.state_mut().addr.reset_latch();
@@ -117,35 +113,35 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_to_oam_addr(&mut self, value: u8) {
-        println!("ppu write_to_oam_addr");
+        // println!("ppu write_to_oam_addr");
         self.state_mut().oam_addr = value;
     }
 
     fn write_to_oam_data(&mut self, value: u8) {
-        println!("ppu write_to_oam_data");
+        // println!("ppu write_to_oam_data");
         let oam_addr = self.state().oam_addr;
         self.state_mut().oam_data[oam_addr as usize] = value;
         self.state_mut().oam_addr = oam_addr.wrapping_add(1);
     }
 
     fn read_oam_data(&self) -> u8 {
-        println!("ppu read_oam_data");
+        // println!("ppu read_oam_data");
         let oam_addr = self.state().oam_addr;
         self.state().oam_data[oam_addr as usize]
     }
 
     fn write_to_scroll(&mut self, value: u8) {
-        println!("ppu write_to_scroll");
+        // println!("ppu write_to_scroll");
         self.state_mut().scroll.write(value);
     }
 
     fn write_to_ppu_addr(&mut self, value: u8) {
-        println!("ppu write_to_ppu_addr");
+        // println!("ppu write_to_ppu_addr");
         self.state_mut().addr.update(value);
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
-        println!("ppu mem_write");
+        // println!("ppu mem_write");
         let addr = self.state().addr.get();
         match addr {
             0..=0x1fff => println!("attempt to write to chr rom space {}", addr),
@@ -174,7 +170,7 @@ pub trait Interface: Sized + Context {
     }
 
     fn read_data(&mut self) -> u8 {
-        println!("ppu read_data");
+        // println!("ppu read_data");
         let addr = self.state().addr.get();
 
         self.increment_vram_addr();
@@ -205,7 +201,7 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_oam_dma(&mut self, data: &[u8; 256]) {
-        println!("ppu write_oam_dma");
+        // println!("ppu write_oam_dma");
         for x in data.iter() {
             let oarm_addr = self.state().oam_addr;
             self.state_mut().oam_data[oarm_addr as usize] = *x;
