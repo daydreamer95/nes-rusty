@@ -180,11 +180,11 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
             let mut upper = tile[y];
             let mut lower = tile[y + 8];
             for x in (0..=7).rev() {
-                let value = (1 & upper) << 1 | (1 & lower);
+                let value = (1 & lower) << 1 | (1 & upper);
                 upper = upper >> 1;
                 lower = lower >> 1;
                 let rgb = match value {
-                    0 => SYSTEM_PALLETE[ppu.palette_table[1] as usize],
+                    0 => SYSTEM_PALLETE[ppu.palette_table[0] as usize],
                     1 => SYSTEM_PALLETE[palette[1] as usize],
                     2 => SYSTEM_PALLETE[palette[2] as usize],
                     3 => SYSTEM_PALLETE[palette[3] as usize],

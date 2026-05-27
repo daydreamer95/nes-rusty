@@ -141,7 +141,6 @@ pub trait Interface: Sized + Context {
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
-        // println!("ppu mem_write");
         let addr = self.state().addr.get();
         match addr {
             0..=0x1fff => println!("attempt to write to chr rom space {}", addr),
@@ -300,8 +299,8 @@ impl PPU {
 
 trait Private: Sized + Context {
     fn increment_vram_addr(&mut self) {
-        let vram_address = self.state_mut().ctrl.vram_addr_increment();
-        self.state_mut().addr.increment(vram_address);
+        let vram_address_incre = self.state_mut().ctrl.vram_addr_increment();
+        self.state_mut().addr.increment(vram_address_incre);
     }
 
     // https://wiki.nesdev.org/w/index.php/Mirroring
