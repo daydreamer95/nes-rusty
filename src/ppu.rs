@@ -201,7 +201,7 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_oam_dma(&mut self, data: &[u8; 256]) {
-        // println!("ppu write_oam_dma");
+        println!("ppu write_oam_dma");
         for x in data.iter() {
             let oarm_addr = self.state().oam_addr;
             self.state_mut().oam_data[oarm_addr as usize] = *x;

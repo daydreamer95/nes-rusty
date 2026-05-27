@@ -149,7 +149,7 @@ pub trait Private: Sized + Context {
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU read");
                 let mirror_down_addr = addr & 0b00100000_00000111;
-                Private::mem_read(self, mirror_down_addr)
+                Private::mem_read(self, addr)
                 // ppu::Interface::mem_read(self.newtype_mut(), mirror_down_addr)
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // return 0;
@@ -223,7 +223,7 @@ pub trait Private: Sized + Context {
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU write");
                 let _mirror_down_addr = addr & 0b00100000_00000111;
-                Private::mem_write(self, _mirror_down_addr, data);
+                Private::mem_write(self, addr, data);
                 // ppu::Interface::mem_write(self.newtype_mut(), _mirror_down_addr, data);
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // let _mirror_down_addr = addr & 0b00100000_00000111;
