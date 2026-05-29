@@ -77,7 +77,7 @@ fn main() {
 
     // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
-        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/pacmac.nes".to_string());
+        virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/Super_mario_bros.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
 

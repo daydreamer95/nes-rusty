@@ -69,9 +69,19 @@ pub trait Interface: Sized + Context {
         self.state_mut().nmi_interrupt.take()
     }
 
+    fn is_sprite_0_hit(&self, cycle: usize) -> bool {
+        let y = self.state().oam_data[0] as usize;
+        let x = self.state().oam_data[3] as usize;
+        (y == self.state().scanline as usize) && x <= cycle && self.state().mask.show_sprites()
+    }
+
     fn tick(&mut self, cycles: u8) -> bool {
         self.state_mut().cycles += cycles as usize;
         if self.state().cycles >= 341 {
+            if self.is_sprite_0_hit(self.state().cycles) {
+                self.state_mut().status.set_sprite_zero_hit(true);
+            }
+
             self.state_mut().cycles -= 341;
             self.state_mut().scanline += 1;
 
@@ -131,7 +141,7 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_to_scroll(&mut self, value: u8) {
-        // println!("ppu write_to_scroll");
+        // println!("ppu write_to_scroll {:?}", value);
         self.state_mut().scroll.write(value);
     }
 
@@ -200,7 +210,7 @@ pub trait Interface: Sized + Context {
     }
 
     fn write_oam_dma(&mut self, data: &[u8; 256]) {
-        println!("ppu write_oam_dma");
+        // println!("ppu write_oam_dma");
         for x in data.iter() {
             let oarm_addr = self.state().oam_addr;
             self.state_mut().oam_data[oarm_addr as usize] = *x;

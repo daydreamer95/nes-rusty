@@ -112,7 +112,8 @@ trait Context: Sized {
     fn tick(&mut self, cycles: u8) {
         // self.state_mut().cycles += cycles as usize;
         cpu::Context::tick(self.newtype_mut(), cycles);
-        ppu::Interface::tick(self.newtype_mut(), cycles * 3);
+        ppu::Interface::tick(self.newtype_mut(), cycles * 3); //because ppu tick 3 times faster
+        //than cpu
     }
 }
 
@@ -149,7 +150,7 @@ pub trait Private: Sized + Context {
             0x2008..=PPU_REGISTERS_MIRRORS_END => {
                 println!("PPU read");
                 let mirror_down_addr = addr & 0b00100000_00000111;
-                Private::mem_read(self, addr)
+                Private::mem_read(self, mirror_down_addr)
                 // ppu::Interface::mem_read(self.newtype_mut(), mirror_down_addr)
                 // panic!("Attempt to read from write-only PPU address {:x}", addr);
                 // return 0;
