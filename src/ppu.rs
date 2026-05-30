@@ -91,6 +91,7 @@ pub trait Interface: Sized + Context {
                 if self.state_mut().ctrl.generate_vblank_nmi() {
                     // println!("ppu interrupt: {:?}", self.state().cycles);
                     self.state_mut().nmi_interrupt = Some(1);
+                    self.state_mut().frame_completed = true;
                 }
             }
 
@@ -100,7 +101,6 @@ pub trait Interface: Sized + Context {
                 self.state_mut().nmi_interrupt = None;
                 self.state_mut().status.set_sprite_zero_hit(false);
                 self.state_mut().status.reset_vblank_status();
-                self.state_mut().frame_completed = true;
                 return true;
             }
         }
