@@ -72,50 +72,10 @@ fn main() {
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
     //...//
-    //let mut cpu = cpu::CPU::new();
-    //let games_code: &Vec<u8> = &(*SNAKE_GAME_CODE);
-
-    // let mut emulator = virtual_nes::Emulator::new_with_gamecodes(games_code.clone());
     let mut emulator =
         virtual_nes::Emulator::new("/Users/huy/Source/snes-rusty/Super_mario_bros.nes".to_string());
 
     virtual_nes::Interface::reset(&mut emulator);
-
-    // let mut screen_state = [0 as u8; 32 * 3 * 32];
-    // let mut rng = rand::thread_rng();
-    //
-    // virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
-    //     handle_user_input(emulator, &mut event_pump);
-    //     virtual_nes::Private::mem_write(emulator, 0xfe, rng.gen_range(1, 16));
-    //     // cpu.mem_write(0xfe, rng.gen_range(1, 16));
-    //     if read_screen_state(emulator, &mut screen_state) {
-    //         texture.update(None, &screen_state, 32 * 3).unwrap();
-    //         canvas.copy(&texture, None, None).unwrap();
-    //         canvas.present();
-    //     }
-    //
-    //     std::thread::sleep(std::time::Duration::new(0, 90_000));
-    // });
-
-    // Display tile bank
-    // let title_frame = show_tile_bank(&mut emulator.nes_rom.chr_rom.clone(), 1);
-    // texture.update(None, &title_frame.data, 256 * 3).unwrap();
-    // canvas.copy(&texture, None, None).unwrap();
-    // canvas.present();
-    //
-    // loop {
-    //     for event in event_pump.poll_iter() {
-    //         match event {
-    //             Event::Quit { .. }
-    //             | Event::KeyDown {
-    //                 keycode: Some(Keycode::Escape),
-    //                 ..
-    //             } => std::process::exit(0),
-    //             _ => { /* do nothing */ }
-    //         }
-    //     }
-    // }
-
     // key map
     let mut key_map = HashMap::new();
     key_map.insert(Keycode::S, joypad::JoypadButton::DOWN);
@@ -129,8 +89,18 @@ fn main() {
 
     let mut frame = Frame::new();
     virtual_nes::Interface::run_with_callback(&mut emulator, move |emulator| {
-        if !emulator.ppu_state.frame_completed {
+        if !emulator.ppu_state.frame_completed
+            || (emulator.ppu_state.frame_sprite_0_hit && frame.is_sprite_0_hit)
+        {
             return;
+        }
+
+        println!(
+            "callback sprite_0_hit: {:?} frame_completed {:?}",
+            emulator.ppu_state.frame_sprite_0_hit, emulator.ppu_state.frame_sprite_0_hit
+        );
+        if emulator.ppu_state.frame_sprite_0_hit {
+            frame.is_sprite_0_hit = false;
         }
 
         emulator.ppu_state.frame_completed = false;
@@ -162,76 +132,4 @@ fn main() {
             }
         }
     });
-}
-
-fn handle_user_input(emulator: &mut virtual_nes::Emulator, event_pump: &mut EventPump) {
-    for event in event_pump.poll_iter() {
-        match event {
-            Event::Quit { .. }
-            | Event::KeyDown {
-                keycode: Some(Keycode::Escape),
-                ..
-            } => std::process::exit(0),
-            Event::KeyDown {
-                keycode: Some(Keycode::W),
-                ..
-            } => {
-                virtual_nes::Private::mem_write(emulator, 0xff, 0x77);
-                // cpu.mem_write(0xff, 0x77);
-            }
-            Event::KeyDown {
-                keycode: Some(Keycode::S),
-                ..
-            } => {
-                virtual_nes::Private::mem_write(emulator, 0xff, 0x73);
-                // cpu.mem_write(0xff, 0x73);
-            }
-            Event::KeyDown {
-                keycode: Some(Keycode::A),
-                ..
-            } => {
-                virtual_nes::Private::mem_write(emulator, 0xff, 0x61);
-                // cpu.mem_write(0xff, 0x61);
-            }
-            Event::KeyDown {
-                keycode: Some(Keycode::D),
-                ..
-            } => {
-                virtual_nes::Private::mem_write(emulator, 0xff, 0x64);
-                // cpu.mem_write(0xff, 0x64);
-            }
-            _ => { /* do nothing */ }
-        }
-    }
-}
-
-fn color(byte: u8) -> Color {
-    match byte {
-        0 => sdl2::pixels::Color::BLACK,
-        1 => sdl2::pixels::Color::WHITE,
-        2 | 9 => sdl2::pixels::Color::GREY,
-        3 | 10 => sdl2::pixels::Color::RED,
-        4 | 11 => sdl2::pixels::Color::GREEN,
-        5 | 12 => sdl2::pixels::Color::BLUE,
-        6 | 13 => sdl2::pixels::Color::MAGENTA,
-        7 | 14 => sdl2::pixels::Color::YELLOW,
-        _ => sdl2::pixels::Color::CYAN,
-    }
-}
-
-fn read_screen_state(emulator: &mut virtual_nes::Emulator, frame: &mut [u8; 32 * 3 * 32]) -> bool {
-    let mut frame_idx = 0;
-    let mut update = false;
-    for i in 0x0200..0x600 {
-        let color_idx = virtual_nes::Private::mem_read(emulator, i as u16);
-        let (b1, b2, b3) = color(color_idx).rgb();
-        if frame[frame_idx] != b1 || frame[frame_idx + 1] != b2 || frame[frame_idx + 2] != b3 {
-            frame[frame_idx] = b1;
-            frame[frame_idx + 1] = b2;
-            frame[frame_idx + 2] = b3;
-            update = true;
-        }
-        frame_idx += 3;
-    }
-    update
 }
