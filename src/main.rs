@@ -93,15 +93,6 @@ fn main() {
             return;
         }
 
-        println!(
-            "callback sprite_0_hit status change: {:?} frame_completed {:?}",
-            frame.is_sprite_0_hit != emulator.ppu_state.frame_sprite_0_hit,
-            emulator.ppu_state.frame_sprite_0_hit
-        );
-        // if frame.is_sprite_0_hit != emulator.ppu_state.frame_sprite_0_hit {
-        //     frame.is_sprite_0_hit = emulator.ppu_state.frame_sprite_0_hit; // changed
-        // }
-
         emulator.ppu_state.frame_completed = false;
         render::render(&mut emulator.ppu_state, &mut frame);
         texture.update(None, &frame.data, 256 * 3).unwrap();
