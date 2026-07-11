@@ -276,6 +276,145 @@ pub trait Interface: Sized + Context {
         }
     }
 
+    fn run_with_callback_until<F>(
+        &mut self,
+        mut callback: F,
+        poll_nmi_interrupt: fn(&mut Self) -> Option<u8>,
+        tick_callback: fn(&mut Self, u8),
+    ) where
+        F: FnMut(&mut Self) -> bool,
+    {
+        let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
+
+        loop {
+            let code = self.mem_read(self.state().program_counter);
+            let current_opcode = all_op_codes
+                .get(&code)
+                .unwrap_or_else(|| panic!("OP code {:X} not found", code));
+            if let Some(_nmi) = poll_nmi_interrupt(self) {
+                self.interrupt_nmi(current_opcode._cycles);
+            }
+
+            let code = self.mem_read(self.state().program_counter);
+            self.state_mut().program_counter += 1;
+            let current_program_counter_state = self.state().program_counter;
+
+            match code {
+                0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => {
+                    self.adc(&current_opcode.addressing_mode);
+                }
+                0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+                    self.and(&current_opcode.addressing_mode);
+                }
+                0x0A | 0x06 | 0x16 | 0x0E | 0x1E => {
+                    self.asl(&current_opcode.addressing_mode);
+                }
+                0x90 => self.bcc(&current_opcode.addressing_mode),
+                0xB0 => self.bcs(&current_opcode.addressing_mode),
+                0x50 => self.bvc(&current_opcode.addressing_mode),
+                0x70 => self.bvs(&current_opcode.addressing_mode),
+                0xF0 => self.beq(&current_opcode.addressing_mode),
+                0xD0 => self.bne(&current_opcode.addressing_mode),
+                0x10 => self.bpl(&current_opcode.addressing_mode),
+                0x24 | 0x2C => {
+                    self.bit(&current_opcode.addressing_mode);
+                }
+                0x30 => self.bmi(&current_opcode.addressing_mode),
+                0x18 => self.clc(),
+                0xD8 => self.cld(),
+                0x58 => self.cli(),
+                0xB8 => self.clv(),
+                0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
+                    self.cmp(&current_opcode.addressing_mode);
+                }
+                0xE0 | 0xE4 | 0xEC => {
+                    self.cpx(&current_opcode.addressing_mode);
+                }
+                0xCE | 0xDE | 0xC6 | 0xD6 => {
+                    self.dec(&current_opcode.addressing_mode);
+                }
+                0xC0 | 0xC4 | 0xCC => {
+                    self.cpy(&current_opcode.addressing_mode);
+                }
+                0xCA => self.dex(),
+                0x88 => self.dey(),
+                0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
+                    self.eor(&current_opcode.addressing_mode);
+                }
+                0xE6 | 0xF6 | 0xEE | 0xFE => {
+                    self.inc(&current_opcode.addressing_mode);
+                }
+                0xE8 => self.inx(),
+                0xC8 => self.iny(),
+                0x4C | 0x6C => self.jmp(&current_opcode.addressing_mode),
+                0x20 => self.jsr(&current_opcode.addressing_mode),
+                0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
+                    self.lda(&current_opcode.addressing_mode);
+                }
+                0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
+                    self.ldx(&current_opcode.addressing_mode);
+                }
+                0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
+                    self.ldy(&current_opcode.addressing_mode);
+                }
+                0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+                    self.lsr(&current_opcode.addressing_mode);
+                }
+                0xEA => self.nop(),
+                0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
+                    self.ora(&current_opcode.addressing_mode);
+                }
+                0x48 => self.pha(),
+                0x08 => self.php(),
+                0x68 => self.pla(),
+                0x28 => self.plp(),
+                0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&current_opcode.addressing_mode),
+                0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&current_opcode.addressing_mode),
+                0x40 => self.rti(),
+                0x60 => self.rts(),
+                0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => {
+                    self.sbc(&current_opcode.addressing_mode)
+                }
+                0x38 => self.sec(),
+                0xF8 => self.sed(),
+                0x78 => self.sei(),
+                0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
+                    self.sta(&current_opcode.addressing_mode);
+                }
+                0x86 | 0x96 | 0x8E => {
+                    self.stx(&current_opcode.addressing_mode);
+                }
+                0x84 | 0x94 | 0x8C => {
+                    self.sty(&current_opcode.addressing_mode);
+                }
+                0xAA => self.tax(),
+                0xA8 => self.tay(),
+                0x8A => self.txa(),
+                0xBA => self.tsx(),
+                0x9A => self.txs(),
+                0x98 => self.tya(),
+                0x00 => {
+                    self.brk();
+                    println!(
+                        "Reached break with program counter: {:x}",
+                        self.state().program_counter
+                    );
+                    return;
+                }
+                _ => return,
+            }
+
+            tick_callback(self, current_opcode._cycles);
+            if current_program_counter_state == self.state().program_counter {
+                self.state_mut().program_counter += (current_opcode.bytes - 1) as u16;
+            }
+
+            if callback(self) {
+                break;
+            }
+        }
+    }
+
     fn run(&mut self) {
         let all_op_codes: &HashMap<u8, &'static Opcode> = &(*OPCODES_MAP);
 

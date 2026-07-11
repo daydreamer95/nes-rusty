@@ -279,6 +279,22 @@ pub trait Interface: Sized + Context {
         );
     }
 
+    fn run_with_callback_until<F>(
+        &mut self,
+        mut callback: F,
+        poll_nmi_interrupt: fn(&mut Orphan<Self>) -> Option<u8>,
+        tick_callback: fn(&mut Orphan<Self>, u8),
+    ) where
+        F: FnMut(&mut Emulator) -> bool,
+    {
+        cpu::Interface::run_with_callback_until(
+            self.newtype_mut(),
+            move |orphan| callback(orphan.as_mut().state_mut()),
+            poll_nmi_interrupt,
+            tick_callback,
+        );
+    }
+
     // reset response for program state. Must be reset before program ROM actually run
     // 1. LOAD ROM
     // 2. RESET
