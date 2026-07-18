@@ -361,19 +361,19 @@ fn GameCanvas() -> impl IntoView {
                         <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #8ea6c6; margin-bottom: 8px;">Direction</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">L</span>
+                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">A</span>
                                 <span style="font-size: 13px; color: #e6e6e6;">Left</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">R</span>
+                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">D</span>
                                 <span style="font-size: 13px; color: #e6e6e6;">Right</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">U</span>
+                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">W</span>
                                 <span style="font-size: 13px; color: #e6e6e6;">Up</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">D</span>
+                                <span style="min-width: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid #4a4a4a; background: #252525; font-size: 12px; font-weight: 700; text-align: center;">S</span>
                                 <span style="font-size: 13px; color: #e6e6e6;">Down</span>
                             </div>
                         </div>
